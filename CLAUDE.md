@@ -73,12 +73,12 @@ pytest tests/
 
 ## Current Status
 
-**Phase 1 complete + alignment fixes done.**
+**Phase 1 complete. Alignment fixes done.**
 
-Done: Ember connector, cache, RSS monitor (keyword filter), enricher (local entity extraction + Claude fallback), drafter, orchestrator, CLI. Notion editorial queue created. 14 tests.
-Run with: `python scripts/run_pipeline.py --source mongabay`
-Notion: "Energy Editorial Queue" database with board view. Notion updates happen via MCP in Claude Code sessions (not from standalone Python).
-Next: editorial review skill via /skill-creator.
+Done: Ember connector, cache, RSS monitor (keyword filter), enricher (local entity extraction + Claude fallback), drafter, orchestrator, CLI. Notion editorial queue. Editorial review skill. 14 tests.
+Run: `python scripts/run_pipeline.py --source mongabay` | Review: invoke `/energy-editorial-review` on a draft file.
+Notion: "Energy Editorial Queue" database with board view (MCP in Claude Code sessions).
+Next: test with real API keys, then Phase 2 data sources (EIA, Carbon Brief).
 
 ## Notes for Claude Code
 
