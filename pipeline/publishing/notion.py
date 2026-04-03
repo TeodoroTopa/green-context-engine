@@ -304,14 +304,25 @@ class NotionPublisher:
             date_prop = props.get("Date Found", {}).get("date", {})
             date_str = date_prop.get("start", "") if date_prop else ""
 
+            # Fallback date: use today if Date Found not set
+            if not date_str:
+                import datetime
+                date_str = datetime.date.today().isoformat()
+
             # Build frontmatter
+            # Title links to source and shows attribution
+            display_title = title
+            if source_name:
+                display_title = f"{title} ({source_name})"
+
             lines = [
                 "---",
-                f'title: "{title}"',
+                f'title: "{display_title}"',
+                f"date: {date_str}",
+                f"source_url: {url}" if url else None,
+                "sources:",
             ]
-            if date_str:
-                lines.append(f"date: {date_str}")
-            lines.append("sources:")
+            lines = [l for l in lines if l is not None]
             if source_name and url:
                 lines.append(f"  - name: {source_name}")
                 lines.append(f"    url: {url}")
