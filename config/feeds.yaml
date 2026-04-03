@@ -10,6 +10,10 @@ feeds:
     url: "https://news.mongabay.com/feed/?post_type=post&feedtype=bulletpoints&topic=climate-change"
     source: mongabay
 
+  - name: carbonbrief_main
+    url: "https://www.carbonbrief.org/feed/"
+    source: carbonbrief
+
 # Stories must match at least one keyword in title or summary to proceed.
 # This filters before any Claude API calls, saving cost.
 relevance_keywords:
@@ -33,3 +37,11 @@ relevance_keywords:
   - natural gas
   - oil production
   - climate policy
+  - carbon intensity
+  - power generation
+  - energy transition
+  - net zero
+  - clean energy
+  - hydrogen
+  - offshore wind
+  - geothermal
