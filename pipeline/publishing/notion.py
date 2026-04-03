@@ -72,7 +72,7 @@ class NotionPublisher:
         if source_name:
             properties["Source"] = {"select": {"name": source_name}}
         if source_url:
-            properties["URL"] = {"url": source_url}
+            properties["userDefined:URL"] = {"url": source_url}
         if frontmatter.get("date"):
             properties["Date Found"] = {"date": {"start": self._normalize_date(frontmatter["date"])}}
         if topics:
