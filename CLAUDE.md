@@ -73,10 +73,11 @@ pytest tests/
 
 ## Current Status
 
-**Phase 1 in progress.** Ember, RSS monitor, enricher, and drafter done.
+**Phase 1 complete.** Full pipeline functional end-to-end.
 
-Done: Ember connector, cache, RSS monitor, enricher (Claude entity extraction + data analysis), drafter (prompt templates, voice validation, markdown output). 11 tests passing.
-Next: orchestrator to wire everything end-to-end.
+Done: Ember connector, cache, RSS monitor, enricher, drafter, orchestrator, CLI entry point. 12 tests passing.
+Run with: `python scripts/run_pipeline.py --source mongabay`
+Next: review CLI + Notion integration, then scheduling.
 
 ## Notes for Claude Code
 
