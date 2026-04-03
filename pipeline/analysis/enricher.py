@@ -1,12 +1,14 @@
 """Enricher — connects news stories to energy data via Claude.
 
-Flow: Story → extract entities (Claude) → fetch Ember data → analyze (Claude)
-→ EnrichedStory with data context and suggested angles.
+Flow: Story → extract entities (local first, Claude fallback) → fetch Ember data
+→ analyze (Claude) → EnrichedStory with data context and suggested angles.
 """
 
 import json
 import logging
+import re
 from dataclasses import dataclass, field
+from pathlib import Path
 
 from anthropic import Anthropic
 
@@ -14,6 +16,8 @@ from pipeline.monitors.rss_monitor import Story
 from pipeline.sources.ember import EmberSource
 
 logger = logging.getLogger(__name__)
+
+COUNTRIES_FILE = Path("data/reference/countries.json")
 
 
 @dataclass
@@ -34,10 +38,21 @@ class Enricher:
         self.ember = ember
         self.client = client
         self.model = model
+        self._countries = self._load_countries()
+
+    def _load_countries(self) -> dict[str, str]:
+        """Load country name → canonical name mapping."""
+        if COUNTRIES_FILE.exists():
+            return json.loads(COUNTRIES_FILE.read_text(encoding="utf-8"))
+        logger.warning(f"Countries file not found: {COUNTRIES_FILE}")
+        return {}
 
     def enrich(self, story: Story) -> EnrichedStory:
         """Full enrichment pipeline for a single story."""
-        entities = self._extract_entities(story)
+        entities = self._extract_entities_local(story)
+        if not entities:
+            logger.info("No local entity match, falling back to Claude")
+            entities = self._extract_entities_claude(story)
         ember_data = self._fetch_data(entities)
         data_summary, angles = self._analyze(story, ember_data)
         return EnrichedStory(
@@ -48,8 +63,19 @@ class Enricher:
             suggested_angles=angles,
         )
 
-    def _extract_entities(self, story: Story) -> list[str]:
-        """Use Claude to extract country/region names from a story."""
+    def _extract_entities_local(self, story: Story) -> list[str]:
+        """Extract country/region names using local lookup. No API call."""
+        text = f"{story.title} {story.summary}"
+        found = []
+        for name, canonical in self._countries.items():
+            # Whole-word match, case-insensitive
+            if re.search(rf"\b{re.escape(name)}\b", text, re.IGNORECASE):
+                if canonical not in found:
+                    found.append(canonical)
+        return found
+
+    def _extract_entities_claude(self, story: Story) -> list[str]:
+        """Fallback: use Claude to extract country/region names from a story."""
         response = self.client.messages.create(
             model=self.model,
             max_tokens=300,

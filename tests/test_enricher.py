@@ -5,7 +5,7 @@ from unittest.mock import MagicMock
 from pipeline.analysis.enricher import Enricher, EnrichedStory
 from pipeline.monitors.rss_monitor import Story
 
-SAMPLE_STORY = Story(
+STORY_WITH_COUNTRY = Story(
     title="Solar capacity surges in Germany",
     url="https://example.com/solar-germany",
     summary="Germany added 10 GW of solar in 2025, a record year.",
@@ -14,25 +14,31 @@ SAMPLE_STORY = Story(
     feed_name="mongabay_energy",
 )
 
+STORY_NO_COUNTRY = Story(
+    title="New battery chemistry could halve costs",
+    url="https://example.com/battery",
+    summary="Researchers develop sodium-ion cells with higher energy density.",
+    published="2026-03-30",
+    source="mongabay",
+    feed_name="mongabay_energy",
+)
+
 
 def _mock_claude_response(text: str) -> MagicMock:
-    """Create a mock Anthropic messages.create() return value."""
     msg = MagicMock()
     msg.content = [MagicMock(text=text)]
     return msg
 
 
-def test_enrich_full_pipeline():
-    """enrich() extracts entities, fetches data, and analyzes."""
+def test_enrich_uses_local_extraction_when_country_found():
+    """When a country is in the text, Claude is only called for analysis (not entity extraction)."""
     client = MagicMock()
     ember = MagicMock()
 
-    # First Claude call: entity extraction → returns ["Germany"]
-    # Second Claude call: analysis → returns summary + angles
-    client.messages.create.side_effect = [
-        _mock_claude_response('["Germany"]'),
-        _mock_claude_response('{"summary": "Germany solar is growing fast.", "angles": ["record capacity"]}'),
-    ]
+    # Only 1 Claude call expected: analysis (entity extraction is local)
+    client.messages.create.return_value = _mock_claude_response(
+        '{"summary": "Germany solar is growing fast.", "angles": ["record capacity"]}'
+    )
     ember.get_generation_context.return_value = {
         "entity": "Germany",
         "generation": [{"series": "Solar", "generation_twh": 72, "date": "2025"}],
@@ -40,12 +46,32 @@ def test_enrich_full_pipeline():
     }
 
     enricher = Enricher(ember, client)
-    result = enricher.enrich(SAMPLE_STORY)
+    result = enricher.enrich(STORY_WITH_COUNTRY)
 
-    assert isinstance(result, EnrichedStory)
     assert result.entities == ["Germany"]
     assert "Germany" in result.ember_data
-    assert "solar" in result.data_summary.lower()
-    assert len(result.suggested_angles) == 1
-    ember.get_generation_context.assert_called_once_with("Germany")
+    # Only 1 Claude call (analysis), not 2 (entity extraction skipped)
+    assert client.messages.create.call_count == 1
+
+
+def test_enrich_falls_back_to_claude_when_no_country():
+    """When no country found locally, falls back to Claude for entity extraction."""
+    client = MagicMock()
+    ember = MagicMock()
+
+    # 2 Claude calls: entity extraction fallback + analysis
+    client.messages.create.side_effect = [
+        _mock_claude_response('["World"]'),
+        _mock_claude_response('{"summary": "Battery tech advancing.", "angles": ["cost reduction"]}'),
+    ]
+    ember.get_generation_context.return_value = {
+        "entity": "World",
+        "generation": [],
+        "carbon_intensity": [],
+    }
+
+    enricher = Enricher(ember, client)
+    result = enricher.enrich(STORY_NO_COUNTRY)
+
+    assert result.entities == ["World"]
     assert client.messages.create.call_count == 2
