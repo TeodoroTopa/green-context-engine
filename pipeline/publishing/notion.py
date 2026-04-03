@@ -208,6 +208,119 @@ class NotionPublisher:
             logger.error(f"Failed to query Notion database: {e}")
             return []
 
+    def get_page_content(self, page_id: str) -> str:
+        """Fetch a page's content blocks and convert back to markdown.
+
+        Args:
+            page_id: The Notion page ID.
+
+        Returns:
+            Markdown string of the page body (no frontmatter).
+        """
+        try:
+            resp = requests.get(
+                f"{NOTION_API}/blocks/{page_id}/children",
+                headers=self.headers,
+                params={"page_size": 100},
+                timeout=15,
+            )
+            resp.raise_for_status()
+            blocks = resp.json().get("results", [])
+            return self._blocks_to_markdown(blocks)
+        except requests.RequestException as e:
+            logger.error(f"Failed to fetch page content: {e}")
+            return ""
+
+    def get_page_as_markdown(self, page_id: str) -> str:
+        """Fetch a full page as markdown with YAML frontmatter.
+
+        Reads page properties for metadata and block children for body.
+
+        Args:
+            page_id: The Notion page ID.
+
+        Returns:
+            Complete markdown string with frontmatter + body.
+        """
+        try:
+            # Fetch page properties
+            resp = requests.get(
+                f"{NOTION_API}/pages/{page_id}",
+                headers=self.headers,
+                timeout=15,
+            )
+            resp.raise_for_status()
+            page = resp.json()
+            props = page.get("properties", {})
+
+            # Extract metadata
+            title_arr = props.get("Story Title", {}).get("title", [])
+            title = title_arr[0]["text"]["content"] if title_arr else "Untitled"
+            url = props.get("userDefined:URL", {}).get("url", "")
+            source_sel = props.get("Source", {}).get("select", {})
+            source_name = source_sel.get("name", "") if source_sel else ""
+            date_prop = props.get("Date Found", {}).get("date", {})
+            date_str = date_prop.get("start", "") if date_prop else ""
+
+            # Build frontmatter
+            lines = [
+                "---",
+                f'title: "{title}"',
+            ]
+            if date_str:
+                lines.append(f"date: {date_str}")
+            lines.append("sources:")
+            if source_name and url:
+                lines.append(f"  - name: {source_name}")
+                lines.append(f"    url: {url}")
+            lines.append("  - name: Ember")
+            lines.append("    url: https://ember-energy.org")
+            lines.append("status: approved")
+            lines.append("---")
+
+            # Fetch body
+            body = self.get_page_content(page_id)
+            return "\n".join(lines) + "\n\n" + body
+
+        except requests.RequestException as e:
+            logger.error(f"Failed to fetch page as markdown: {e}")
+            return ""
+
+    def _blocks_to_markdown(self, blocks: list[dict]) -> str:
+        """Convert Notion block objects back to markdown text."""
+        lines = []
+        for block in blocks:
+            block_type = block.get("type", "")
+
+            if block_type == "divider":
+                lines.append("\n---\n")
+            elif block_type == "heading_2":
+                text = self._rich_text_to_markdown(block["heading_2"].get("rich_text", []))
+                lines.append(f"\n## {text}\n")
+            elif block_type == "heading_3":
+                text = self._rich_text_to_markdown(block["heading_3"].get("rich_text", []))
+                lines.append(f"\n### {text}\n")
+            elif block_type == "paragraph":
+                text = self._rich_text_to_markdown(block["paragraph"].get("rich_text", []))
+                if text:
+                    lines.append(f"\n{text}\n")
+            # Skip unknown block types silently
+
+        return "\n".join(lines).strip()
+
+    def _rich_text_to_markdown(self, rich_text: list[dict]) -> str:
+        """Convert Notion rich text items back to markdown inline formatting."""
+        parts = []
+        for item in rich_text:
+            text = item.get("text", {}).get("content", "")
+            annotations = item.get("annotations", {})
+            if annotations.get("bold"):
+                text = f"**{text}**"
+            elif annotations.get("italic"):
+                text = f"*{text}*"
+            parts.append(text)
+        return "".join(parts)
+
     def append_content(self, page_id: str, draft_path: Path) -> bool:
         """Append the draft body as content blocks to an existing Notion page.
 

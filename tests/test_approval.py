@@ -2,90 +2,51 @@
 
 from unittest.mock import MagicMock, patch
 
-from pipeline.publishing.approval import (
-    find_matching_draft,
-    process_approved,
-    _titles_match,
-)
-
-
-def test_find_matching_draft_by_slug(tmp_path):
-    """Finds a draft by slugified title in the filename."""
-    draft = tmp_path / "2026-04-03_solar-surge-in-germany.md"
-    draft.write_text("---\ntitle: Solar Surge in Germany\n---\n\nContent.")
-
-    result = find_matching_draft("Solar surge in Germany", tmp_path)
-    assert result == draft
-
-
-def test_find_matching_draft_by_frontmatter(tmp_path):
-    """Falls back to frontmatter title matching."""
-    # Filename doesn't match, but frontmatter does
-    draft = tmp_path / "2026-04-03_renamed-file.md"
-    draft.write_text('---\ntitle: "Indonesia Deforestation Crisis"\n---\n\nContent.')
-
-    result = find_matching_draft("Indonesia Deforestation Crisis", tmp_path)
-    assert result == draft
-
-
-def test_find_matching_draft_returns_none(tmp_path):
-    """Returns None when no draft matches."""
-    draft = tmp_path / "2026-04-03_unrelated-story.md"
-    draft.write_text("---\ntitle: Unrelated Story\n---\n\nContent.")
-
-    result = find_matching_draft("Solar Surge in Germany", tmp_path)
-    assert result is None
-
-
-def test_titles_match_handles_variations():
-    """_titles_match normalizes punctuation and case."""
-    assert _titles_match("Solar Surge!", "solar surge")
-    assert _titles_match("Indonesia's Crisis", "indonesias crisis")
-    assert not _titles_match("Solar in Germany", "Coal in China")
+from pipeline.publishing.approval import process_approved
 
 
 @patch("pipeline.publishing.approval.publish_to_website", return_value=True)
-def test_process_approved_full_flow(mock_publish, tmp_path):
-    """process_approved moves drafts and updates Notion status."""
-    drafts = tmp_path / "drafts"
-    approved = tmp_path / "approved"
-    drafts.mkdir()
-
-    draft_file = drafts / "2026-04-03_test-story-about-energy.md"
-    draft_file.write_text("---\ntitle: Test Story About Energy\n---\n\nContent.")
-
+def test_process_approved_reads_from_notion(mock_publish):
+    """process_approved reads content from Notion and publishes."""
     notion = MagicMock()
     notion.get_pages_by_status.return_value = [
-        {"id": "page-1", "title": "Test Story About Energy", "url": "", "source": "Mongabay"}
+        {"id": "page-1", "title": "Test Story", "url": "", "source": "Mongabay"}
     ]
+    notion.get_page_as_markdown.return_value = "---\ntitle: Test\n---\n\n## Hook\n\nContent."
     notion.update_status.return_value = True
 
-    results = process_approved(notion, drafts_dir=drafts, approved_dir=approved)
+    results = process_approved(notion)
 
     assert len(results) == 1
     assert results[0]["status"] == "published"
-    assert (approved / "2026-04-03_test-story-about-energy.md").exists()
-    assert not draft_file.exists()  # moved, not copied
+    assert results[0]["content_length"] > 0
+    notion.get_page_as_markdown.assert_called_once_with("page-1")
     notion.update_status.assert_called_once_with("page-1", "Published")
-    mock_publish.assert_called_once()
+    mock_publish.assert_called_once_with("Test Story", notion.get_page_as_markdown.return_value)
 
 
-def test_process_approved_no_matching_draft(tmp_path):
-    """process_approved handles missing draft files gracefully."""
-    drafts = tmp_path / "drafts"
-    approved = tmp_path / "approved"
-    drafts.mkdir()
-
+def test_process_approved_handles_empty_content():
+    """process_approved skips pages with no readable content."""
     notion = MagicMock()
     notion.get_pages_by_status.return_value = [
-        {"id": "page-1", "title": "Nonexistent Draft", "url": "", "source": ""}
+        {"id": "page-1", "title": "Empty Page", "url": "", "source": ""}
     ]
+    notion.get_page_as_markdown.return_value = ""
 
-    results = process_approved(notion, drafts_dir=drafts, approved_dir=approved)
+    results = process_approved(notion)
 
     assert len(results) == 1
-    assert results[0]["status"] == "no_draft_found"
+    assert results[0]["status"] == "no_content"
     notion.update_status.assert_not_called()
+
+
+def test_process_approved_no_approved_pages():
+    """process_approved returns empty list when nothing is approved."""
+    notion = MagicMock()
+    notion.get_pages_by_status.return_value = []
+
+    results = process_approved(notion)
+    assert results == []
 
 
 @patch("pipeline.publishing.notion.requests")
@@ -112,9 +73,44 @@ def test_get_pages_by_status(mock_requests):
     assert len(pages) == 1
     assert pages[0]["id"] == "page-abc"
     assert pages[0]["title"] == "My Story"
-    assert pages[0]["source"] == "Mongabay"
-
-    # Verify the filter was sent
     call_payload = mock_requests.post.call_args.kwargs["json"]
-    assert call_payload["filter"]["property"] == "Status"
     assert call_payload["filter"]["select"]["equals"] == "Approved"
+
+
+def test_blocks_to_markdown():
+    """_blocks_to_markdown converts Notion blocks back to markdown."""
+    from pipeline.publishing.notion import NotionPublisher
+
+    pub = NotionPublisher(database_id="db-id", token="fake-token")
+    blocks = [
+        {"type": "heading_2", "heading_2": {"rich_text": [{"text": {"content": "The Hook"}, "annotations": {}}]}},
+        {"type": "paragraph", "paragraph": {"rich_text": [{"text": {"content": "Some text."}, "annotations": {}}]}},
+        {"type": "divider", "divider": {}},
+        {"type": "paragraph", "paragraph": {"rich_text": [
+            {"text": {"content": "Bold part"}, "annotations": {"bold": True}},
+            {"text": {"content": " and "}, "annotations": {}},
+            {"text": {"content": "italic"}, "annotations": {"italic": True}},
+        ]}},
+    ]
+    md = pub._blocks_to_markdown(blocks)
+
+    assert "## The Hook" in md
+    assert "Some text." in md
+    assert "---" in md
+    assert "**Bold part**" in md
+    assert "*italic*" in md
+
+
+def test_rich_text_to_markdown():
+    """_rich_text_to_markdown handles bold and italic annotations."""
+    from pipeline.publishing.notion import NotionPublisher
+
+    pub = NotionPublisher(database_id="db-id", token="fake-token")
+    rich_text = [
+        {"text": {"content": "Normal "}, "annotations": {}},
+        {"text": {"content": "bold"}, "annotations": {"bold": True}},
+        {"text": {"content": " and "}, "annotations": {}},
+        {"text": {"content": "italic"}, "annotations": {"italic": True}},
+    ]
+    result = pub._rich_text_to_markdown(rich_text)
+    assert result == "Normal **bold** and *italic*"

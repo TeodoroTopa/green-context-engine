@@ -1,11 +1,11 @@
 """CLI script to process approved drafts from the Notion editorial queue.
 
-Polls Notion for pages with Status = "Approved", matches them to local
-draft files, moves them to content/approved/, and updates Notion to "Published".
+Polls Notion for pages with Status = "Approved", reads their content
+directly from Notion, and updates status to "Published".
 
 Usage:
     python scripts/publish_approved.py
-    python scripts/publish_approved.py --dry-run   # show what would happen without changing anything
+    python scripts/publish_approved.py --dry-run   # show what would happen
 """
 
 import argparse
@@ -13,21 +13,16 @@ import logging
 import sys
 from pathlib import Path
 
+from dotenv import load_dotenv
+
 # Fix Windows console encoding for Unicode output
 if sys.stdout.encoding != "utf-8":
     sys.stdout.reconfigure(encoding="utf-8")
 
-from dotenv import load_dotenv
-
 # Add project root to path so imports work
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
-from pipeline.publishing.approval import (
-    APPROVED_DIR,
-    DRAFTS_DIR,
-    find_matching_draft,
-    process_approved,
-)
+from pipeline.publishing.approval import process_approved
 from pipeline.publishing.notion import NotionPublisher
 
 logging.basicConfig(
@@ -43,7 +38,7 @@ def main():
     parser.add_argument(
         "--dry-run",
         action="store_true",
-        help="Show what would happen without moving files or updating Notion",
+        help="Show what would happen without updating Notion",
     )
     args = parser.parse_args()
 
@@ -63,10 +58,11 @@ def main():
 
         print(f"\nFound {len(pages)} approved page(s):\n")
         for page in pages:
-            draft = find_matching_draft(page["title"])
-            status = f"→ {draft.name}" if draft else "⚠ No matching draft found"
+            markdown = notion.get_page_as_markdown(page["id"])
+            preview = markdown[:200].replace("\n", " ") + "..." if len(markdown) > 200 else markdown
             print(f"  [{page['source']}] {page['title']}")
-            print(f"    {status}\n")
+            print(f"    Content: {len(markdown)} chars")
+            print(f"    Preview: {preview[:100]}\n")
         return
 
     results = process_approved(notion)
@@ -77,10 +73,9 @@ def main():
 
     print(f"\nProcessed {len(results)} page(s):\n")
     for r in results:
-        icon = "✓" if r["status"] == "published" else "✗"
-        print(f"  {icon} {r['title']} — {r['status']}")
-        if r.get("draft_path"):
-            print(f"    → {r['draft_path']}")
+        icon = "+" if r["status"] == "published" else "x"
+        extra = f" ({r.get('content_length', 0)} chars)" if r.get("content_length") else ""
+        print(f"  {icon} {r['title']} -- {r['status']}{extra}")
     print()
 
 

@@ -7,6 +7,7 @@ for pipeline automation.
 
 import json
 import logging
+import re
 from pathlib import Path
 
 from pipeline.analysis.utils import strip_code_fences
@@ -102,5 +103,32 @@ def run_quality_gate(
 
         return {"pass": passed, "violations": violations, "summary": summary}
     except json.JSONDecodeError:
-        logger.warning(f"Could not parse quality gate response: {text[:200]}")
-        return {"pass": False, "violations": [], "summary": "Failed to parse quality check"}
+        # Fallback: parse prose response (common in dev mode via claude -p)
+        return _parse_prose_response(text, draft_path.name)
+
+
+def _parse_prose_response(text: str, filename: str) -> dict:
+    """Best-effort parsing of a prose quality gate response.
+
+    Looks for PASS/NEEDS REVISION in the text and extracts a summary.
+    Used as fallback when Claude returns prose instead of JSON (dev mode).
+    """
+    text_upper = text.upper()
+    passed = "PASS" in text_upper and "NEEDS REVISION" not in text_upper
+
+    # Try to extract the summary section
+    summary = ""
+    summary_match = re.search(r"### Summary\s*\n(.+?)(?:\n###|\Z)", text, re.DOTALL)
+    if summary_match:
+        summary = summary_match.group(1).strip()[:300]
+    elif "Score:" in text:
+        score_match = re.search(r"Score:\s*(.+)", text)
+        if score_match:
+            summary = score_match.group(1).strip()
+
+    if passed:
+        logger.info(f"Quality gate PASSED (prose fallback): {filename}")
+    else:
+        logger.warning(f"Quality gate FAILED (prose fallback): {filename} — {summary[:100]}")
+
+    return {"pass": passed, "violations": [], "summary": summary or "Parsed from prose response"}

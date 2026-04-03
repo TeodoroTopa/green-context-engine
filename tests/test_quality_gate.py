@@ -46,14 +46,37 @@ def test_quality_gate_fail_with_violations(tmp_path):
     assert result["violations"][0]["category"] == "Source Grounding"
 
 
-def test_quality_gate_handles_bad_json(tmp_path):
-    """Quality gate returns fail on malformed Claude response."""
+def test_quality_gate_prose_fallback_needs_revision(tmp_path):
+    """Quality gate parses prose 'NEEDS REVISION' response from dev mode."""
     draft = tmp_path / "test-draft.md"
     draft.write_text('---\ntitle: "Test"\n---\n\nContent.')
 
     client = MagicMock()
-    client.messages.create.return_value = _mock_response("not json at all")
+    client.messages.create.return_value = _mock_response(
+        "## Editorial Review\n\n### Score: NEEDS REVISION\n\n"
+        "### Summary\nThe draft has sourcing gaps and one data error.\n\n"
+        "### Violations\n\n**Source Grounding** (line ~5)\n> Solar grew 20%\nIssue: No source."
+    )
 
     result = run_quality_gate(client, "claude-sonnet-4-6", draft)
 
     assert result["pass"] is False
+    assert "sourcing gaps" in result["summary"]
+
+
+def test_quality_gate_prose_fallback_pass(tmp_path):
+    """Quality gate parses prose 'PASS' response from dev mode."""
+    draft = tmp_path / "test-draft.md"
+    draft.write_text('---\ntitle: "Test"\n---\n\nContent.')
+
+    client = MagicMock()
+    client.messages.create.return_value = _mock_response(
+        "## Editorial Review\n\n### Score: PASS\n\n"
+        "### Summary\nClean draft, all claims sourced.\n\n"
+        "### What Works Well\nGood data interpretation."
+    )
+
+    result = run_quality_gate(client, "claude-sonnet-4-6", draft)
+
+    assert result["pass"] is True
+    assert "Clean draft" in result["summary"]

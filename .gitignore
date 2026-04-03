@@ -15,6 +15,9 @@ build/
 # Cached API responses
 data/cache/
 
+# Draft content — Notion is the source of truth
+content/
+
 # IDE
 .vscode/
 .idea/
