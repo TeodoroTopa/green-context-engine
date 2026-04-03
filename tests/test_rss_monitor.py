@@ -94,3 +94,35 @@ def test_keyword_filter_removes_irrelevant_stories(mock_parse, tmp_path):
 
     assert len(stories) == 1
     assert stories[0].title == "Solar capacity surges in Southeast Asia"
+
+
+# Empty feed
+EMPTY_RSS = """<?xml version="1.0" encoding="UTF-8"?>
+<rss version="2.0">
+  <channel>
+    <title>Empty Feed</title>
+  </channel>
+</rss>"""
+
+PARSED_EMPTY = feedparser.parse(EMPTY_RSS)
+
+
+@patch("pipeline.monitors.rss_monitor.feedparser.parse", return_value=PARSED_EMPTY)
+def test_empty_feed_returns_no_stories(mock_parse, tmp_path):
+    """An empty feed returns zero stories without crashing."""
+    monitor = RSSMonitor(FEED_CFG, seen_file=tmp_path / "seen.json")
+    stories = monitor.check_feeds()
+    assert len(stories) == 0
+
+
+@patch("pipeline.monitors.rss_monitor.feedparser.parse", return_value=PARSED_FEED)
+def test_multiple_feeds_combine(mock_parse, tmp_path):
+    """Stories from multiple feed configs are combined."""
+    two_feeds = [
+        {"name": "feed_a", "url": "https://fake.com/a", "source": "source_a"},
+        {"name": "feed_b", "url": "https://fake.com/b", "source": "source_b"},
+    ]
+    monitor = RSSMonitor(two_feeds, seen_file=tmp_path / "seen.json")
+    stories = monitor.check_feeds()
+    # Same parsed feed returned for both, but GUIDs dedup across feeds
+    assert len(stories) == 2  # 2 unique GUIDs, not 4

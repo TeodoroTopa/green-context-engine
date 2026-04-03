@@ -106,3 +106,26 @@ def test_extract_draft_passes_clean_text():
     clean = '---\ntitle: "Test"\n---\n\n## The Hook\n\nContent.'
     result = drafter._extract_draft(clean)
     assert result == clean
+
+
+def test_revise_overwrites_draft(tmp_path):
+    """revise() updates the draft file with the corrected version."""
+    draft = tmp_path / "test.md"
+    draft.write_text('---\ntitle: "Test"\n---\n\nCoal was 63% of generation.')
+
+    client = MagicMock()
+    msg = MagicMock()
+    msg.content = [MagicMock(text='---\ntitle: "Test"\n---\n\nCoal was 61% of generation.')]
+    client.messages.create.return_value = msg
+
+    drafter = Drafter(client)
+    result_path = drafter.revise(
+        draft,
+        errors=[{"severity": "high", "claim": "63%", "issue": "Should be 61%", "fix": "Change to 61%"}],
+        data_text="Coal: 228 TWh out of 372 TWh total",
+    )
+
+    assert result_path == draft
+    revised = draft.read_text(encoding="utf-8")
+    assert "61%" in revised
+    assert "63%" not in revised

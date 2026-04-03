@@ -74,6 +74,44 @@ def test_editor_prose_fallback_fail(tmp_path):
     assert "Temporal" in result["summary"]
 
 
+def test_editor_prose_fallback_pass(tmp_path):
+    """Editor parses prose PASS response in dev mode."""
+    draft = tmp_path / "test.md"
+    draft.write_text('---\ntitle: "Test"\n---\n\nContent.')
+
+    client = MagicMock()
+    client.messages.create.return_value = _mock_response(
+        "## Editor Review\n\n### Score: PASS\n\n"
+        "### Summary\nAll claims verified against source data."
+    )
+
+    result = check_draft(
+        client, "test-model", draft,
+        story_title="Test", story_summary="Summary",
+        story_source="Mongabay", data_text="Data",
+    )
+    assert result["pass"] is True
+
+
+def test_editor_handles_empty_draft(tmp_path):
+    """Editor handles an empty draft file gracefully."""
+    draft = tmp_path / "empty.md"
+    draft.write_text("")
+
+    client = MagicMock()
+    client.messages.create.return_value = _mock_response(
+        '{"pass": false, "errors": [{"severity": "critical", "claim": "", '
+        '"issue": "Draft is empty", "fix": "Generate content"}], "summary": "Empty draft."}'
+    )
+
+    result = check_draft(
+        client, "test-model", draft,
+        story_title="Test", story_summary="Summary",
+        story_source="Source", data_text="Data",
+    )
+    assert result["pass"] is False
+
+
 def test_editor_receives_source_data(tmp_path):
     """Editor prompt includes both the draft and source material."""
     draft = tmp_path / "test.md"
