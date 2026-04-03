@@ -14,6 +14,26 @@ feeds:
     url: "https://www.carbonbrief.org/feed/"
     source: carbonbrief
 
+  - name: pvmagazine
+    url: "https://www.pv-magazine.com/feed/"
+    source: pvmagazine
+
+  - name: cleantechnica
+    url: "https://cleantechnica.com/feed/"
+    source: cleantechnica
+
+  - name: utilitydive
+    url: "https://www.utilitydive.com/feeds/news/"
+    source: utilitydive
+
+  - name: electrek
+    url: "https://electrek.co/feed/"
+    source: electrek
+
+  - name: reneweconomy
+    url: "https://reneweconomy.com.au/feed/"
+    source: reneweconomy
+
 # Stories must match at least one keyword in title or summary to proceed.
 # This filters before any Claude API calls, saving cost.
 relevance_keywords:
@@ -45,3 +65,16 @@ relevance_keywords:
   - hydrogen
   - offshore wind
   - geothermal
+  - energy storage
+  - electric vehicle
+  - EV charging
+  - lithium
+  - grid storage
+  - transmission
+  - utility
+  - inverter
+  - deforestation
+  - biodiversity
+  - land use
+  - critical minerals
+  - rare earth
