@@ -35,6 +35,7 @@ class EnrichedStory:
     suggested_angles: list[str] = field(default_factory=list)
     fetch_plan: dict = field(default_factory=dict)
     benchmark_data: dict = field(default_factory=dict)
+    data_text: str = ""
 
 
 class Enricher:
@@ -70,6 +71,7 @@ class Enricher:
             entities = self._extract_entities_local(story) or ["World"]
 
         # 4. Format data and analyze
+        data_text = ""
         if primary_data:
             data_text = self._format_primary_data(primary_data)
             if benchmark_data:
@@ -89,6 +91,7 @@ class Enricher:
             suggested_angles=angles,
             fetch_plan=fetch_plan,
             benchmark_data=benchmark_data,
+            data_text=data_text,
         )
 
     def _execute_plan(self, plan: dict) -> tuple[dict, dict]:

@@ -43,12 +43,12 @@ def test_pipeline_runs_end_to_end(mock_dotenv, mock_yaml, mock_monitor_cls, mock
         msg.content = [MagicMock(text=text)]
         return msg
 
-    # Claude calls: strategist, analysis, draft, quality_gate
+    # Claude calls: strategist, analysis, draft, editor
     mock_client.messages.create.side_effect = [
         make_response('{"fetches": [{"source": "ember", "entity": "World", "role": "primary"}], "reasoning": "test"}'),
         make_response('{"summary": "Solar growing.", "angles": ["Growth"]}'),
         make_response("---\ntitle: Test\nstatus: draft\n---\n\nTest content."),
-        make_response('{"pass": true, "violations": [], "summary": "Clean."}'),
+        make_response('{"pass": true, "errors": [], "summary": "All claims verified."}'),
     ]
     mock_anthropic_cls.return_value = mock_client
 

@@ -17,7 +17,7 @@ from dotenv import load_dotenv
 from pipeline.analysis.enricher import Enricher
 from pipeline.claude_code_client import ClaudeCodeClient
 from pipeline.generation.drafter import Drafter
-from pipeline.generation.quality_gate import run_quality_gate
+from pipeline.generation.editor import check_draft
 from pipeline.monitors.rss_monitor import RSSMonitor
 from pipeline.publishing.notion import NotionPublisher
 from pipeline.sources.eia import EIASource
@@ -107,16 +107,23 @@ class Pipeline:
                 drafts.append(draft_path)
                 logger.info(f"Drafted: {draft_path.name}")
 
-                # Quality gate
-                qg = run_quality_gate(self.client, self.drafter.model, draft_path, tracker)
-                if qg["pass"]:
-                    logger.info(f"Quality gate PASSED: {draft_path.name}")
+                # Editor fact-check
+                edit_result = check_draft(
+                    self.client, self.drafter.model, draft_path,
+                    story_title=story.title,
+                    story_summary=story.summary,
+                    story_source=story.source,
+                    data_text=enriched.data_text,
+                    tracker=tracker,
+                )
+                if edit_result["pass"]:
+                    logger.info(f"Editor PASSED: {draft_path.name}")
                 else:
-                    logger.warning(f"Quality gate: {qg['summary']}")
+                    logger.warning(f"Editor: {edit_result['summary']}")
 
                 logger.info(f"  {tracker.summary()}")
                 if self.notion and notion_page_id:
-                    status = "Review" if qg["pass"] else "Drafted"
+                    status = "Review" if edit_result["pass"] else "Drafted"
                     self.notion.update_status(notion_page_id, status)
                     self.notion.append_content(notion_page_id, draft_path)
 
