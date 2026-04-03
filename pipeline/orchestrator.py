@@ -77,6 +77,8 @@ class Pipeline:
                 enriched = self.enricher.enrich(story, tracker)
                 if not enriched.ember_data:
                     logger.warning(f"Skipping '{story.title}' — no Ember data available")
+                    if self.notion and notion_page_id:
+                        self.notion.update_status(notion_page_id, "Queued")  # reset back
                     continue
 
                 # Draft
