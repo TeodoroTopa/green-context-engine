@@ -33,9 +33,10 @@ class Pipeline:
     def __init__(self):
         load_dotenv()
 
-        # Claude client (dev mode uses CLI proxy)
-        if os.getenv("PIPELINE_MODE") == "dev":
-            logger.info("Dev mode: routing Claude calls through claude CLI")
+        # Claude client (dev/local mode uses CLI proxy, prod uses API)
+        mode = os.getenv("PIPELINE_MODE", "prod")
+        if mode in ("dev", "local"):
+            logger.info(f"{mode.capitalize()} mode: routing Claude calls through claude CLI")
             self.client = ClaudeCodeClient()
         else:
             self.client = Anthropic()

@@ -101,7 +101,7 @@ pytest tests/
 | `EIA_API_KEY` | Yes | EIA US electricity data (free — eia.gov/opendata/register.php) |
 | `NOTION_TOKEN` | Optional | Editorial queue in Notion |
 | `WEBSITE_GITHUB_TOKEN` | Optional | Publishes posts to website repo via GitHub API |
-| `PIPELINE_MODE` | Optional | Set to `dev` to route Claude calls through claude CLI |
+| `PIPELINE_MODE` | Optional | `dev` or `local` = route Claude calls through claude CLI; unset = Anthropic API |
 
 ## Publishing Flow
 
@@ -116,7 +116,13 @@ pytest tests/
 
 **Phases 1-5 complete. Smart data agent + editor with revision loop operational. 63 tests.**
 
-Next: Phase 6 (scheduling with `/schedule` — autonomous daily runs) or more news sources.
+## Local Scheduling
+
+The pipeline runs locally via Windows Task Scheduler using `scripts/run_scheduled.bat`. All Claude calls route through `claude -p` (Claude Code subscription, no API billing). The batch script runs the pipeline then checks for approved drafts.
+
+To set up: Task Scheduler → Create Task → Trigger: Daily → Action: Start `scripts\run_scheduled.bat` → Working dir: project root. Logs go to `logs/`.
+
+Next: more news sources, Phase 7 (GFW/IUCN trade-off layer).
 
 ## Notes for Claude Code
 

@@ -18,6 +18,9 @@ data/cache/
 # Draft content — Notion is the source of truth
 content/
 
+# Scheduled run logs
+logs/
+
 # IDE
 .vscode/
 .idea/
