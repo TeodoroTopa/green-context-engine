@@ -102,24 +102,37 @@ class Pipeline:
                         self.notion.update_status(notion_page_id, "Queued")
                     continue
 
-                # Draft
+                # Draft → Edit → Revise loop (max 2 revision attempts)
                 draft_path = self.drafter.draft(enriched, tracker)
                 drafts.append(draft_path)
                 logger.info(f"Drafted: {draft_path.name}")
 
-                # Editor fact-check
-                edit_result = check_draft(
-                    self.client, self.drafter.model, draft_path,
-                    story_title=story.title,
-                    story_summary=story.summary,
-                    story_source=story.source,
-                    data_text=enriched.data_text,
-                    tracker=tracker,
-                )
-                if edit_result["pass"]:
-                    logger.info(f"Editor PASSED: {draft_path.name}")
-                else:
-                    logger.warning(f"Editor: {edit_result['summary']}")
+                max_revisions = 2
+                for attempt in range(max_revisions + 1):
+                    edit_result = check_draft(
+                        self.client, self.drafter.model, draft_path,
+                        story_title=story.title,
+                        story_summary=story.summary,
+                        story_source=story.source,
+                        data_text=enriched.data_text,
+                        tracker=tracker,
+                    )
+                    if edit_result["pass"]:
+                        logger.info(f"Editor PASSED: {draft_path.name}")
+                        break
+                    if attempt < max_revisions:
+                        logger.info(
+                            f"Editor found errors (attempt {attempt + 1}/{max_revisions}), revising..."
+                        )
+                        self.drafter.revise(
+                            draft_path, edit_result.get("errors", []),
+                            enriched.data_text, tracker,
+                        )
+                    else:
+                        logger.warning(
+                            f"Editor still failing after {max_revisions} revisions: "
+                            f"{edit_result['summary']}"
+                        )
 
                 logger.info(f"  {tracker.summary()}")
                 if self.notion and notion_page_id:

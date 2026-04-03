@@ -55,6 +55,54 @@ class Drafter:
             tracker.track(response, "draft_generation")
         return self._extract_draft(response.content[0].text)
 
+    def revise(self, draft_path: Path, errors: list[dict], data_text: str,
+               tracker: UsageTracker | None = None) -> Path:
+        """Revise a draft based on editor feedback.
+
+        Args:
+            draft_path: Path to the current draft.
+            errors: List of error dicts from the editor (severity, claim, issue, fix).
+            data_text: The source data text for grounding the revision.
+            tracker: Optional usage tracker.
+
+        Returns:
+            Path to the revised draft (overwrites the original).
+        """
+        draft_text = draft_path.read_text(encoding="utf-8")
+        errors_text = "\n".join(
+            f"- [{e.get('severity', '?')}] \"{e.get('claim', '')}\" — {e.get('issue', '')}. "
+            f"Suggested fix: {e.get('fix', 'remove or rewrite')}"
+            for e in errors
+        )
+
+        response = self.client.messages.create(
+            model=self.model,
+            max_tokens=3000,
+            system=(
+                "You are a fact-checking editor revising an energy intelligence brief. "
+                "Fix ONLY the listed errors. Do not change anything else. "
+                "Return ONLY the complete fixed markdown starting with --- frontmatter. "
+                "No explanation, no commentary."
+            ),
+            messages=[{
+                "role": "user",
+                "content": (
+                    f"Fix these errors in the draft. The source data is provided so you "
+                    f"can verify your corrections are accurate.\n\n"
+                    f"## Errors to fix\n{errors_text}\n\n"
+                    f"## Source data (for reference)\n{data_text}\n\n"
+                    f"## Draft to revise\n{draft_text}"
+                ),
+            }],
+        )
+        if tracker:
+            tracker.track(response, "revision")
+
+        revised = self._extract_draft(response.content[0].text)
+        draft_path.write_text(revised, encoding="utf-8")
+        logger.info(f"Revised draft: {draft_path.name}")
+        return draft_path
+
     def _fix_violations(self, draft: str, violations: list[str], tracker: UsageTracker | None = None) -> str:
         """Ask Claude to fix editorial voice violations."""
         violations_text = "\n".join(f"- {v}" for v in violations)
