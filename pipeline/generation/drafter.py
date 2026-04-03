@@ -11,6 +11,7 @@ from pathlib import Path
 from anthropic import Anthropic
 
 from pipeline.analysis.enricher import EnrichedStory
+from pipeline.analysis.utils import strip_code_fences
 from pipeline.generation.prompts.energy_brief import SYSTEM_PROMPT, build_draft_prompt
 from pipeline.generation.voice import check_voice
 from pipeline.usage import UsageTracker
@@ -52,7 +53,7 @@ class Drafter:
         )
         if tracker:
             tracker.track(response, "draft_generation")
-        return response.content[0].text
+        return self._extract_draft(response.content[0].text)
 
     def _fix_violations(self, draft: str, violations: list[str], tracker: UsageTracker | None = None) -> str:
         """Ask Claude to fix editorial voice violations."""
@@ -60,7 +61,11 @@ class Drafter:
         response = self.client.messages.create(
             model=self.model,
             max_tokens=3000,
-            system="You are an editor. Fix the listed violations without changing the substance.",
+            system=(
+                "You are an editor. Fix the listed violations without changing the substance. "
+                "Return ONLY the complete fixed markdown draft starting with the --- frontmatter. "
+                "Do not include any explanation or commentary."
+            ),
             messages=[{
                 "role": "user",
                 "content": (
@@ -72,7 +77,21 @@ class Drafter:
         )
         if tracker:
             tracker.track(response, "voice_fix")
-        return response.content[0].text
+        return self._extract_draft(response.content[0].text)
+
+    def _extract_draft(self, text: str) -> str:
+        """Extract the markdown draft from a Claude response that may include preamble.
+
+        Claude sometimes adds explanatory text before the actual draft and wraps
+        it in ```markdown fences. This strips all of that, returning just the
+        draft starting from the YAML frontmatter.
+        """
+        text = strip_code_fences(text)
+        # Find the start of YAML frontmatter
+        match = re.search(r"^---\s*$", text, re.MULTILINE)
+        if match:
+            return text[match.start():]
+        return text
 
     def _save(self, enriched: EnrichedStory, text: str) -> Path:
         """Save draft to content/drafts/ with a date-slug filename."""

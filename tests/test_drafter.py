@@ -79,3 +79,30 @@ def test_draft_saves_file(tmp_path):
         assert "Germany" in content
     finally:
         drafter_mod.DRAFTS_DIR = original_dir
+
+
+def test_extract_draft_strips_preamble():
+    """_extract_draft removes LLM commentary before the frontmatter."""
+    client = MagicMock()
+    drafter = Drafter(client)
+
+    raw = (
+        'The file has been fixed. Here is the corrected version:\n\n'
+        '```markdown\n'
+        '---\ntitle: "Test"\nstatus: draft\n---\n\n## The Hook\n\nContent.\n'
+        '```'
+    )
+    result = drafter._extract_draft(raw)
+    assert result.startswith("---")
+    assert "The file has been fixed" not in result
+    assert "```" not in result
+
+
+def test_extract_draft_passes_clean_text():
+    """_extract_draft returns clean drafts unchanged."""
+    client = MagicMock()
+    drafter = Drafter(client)
+
+    clean = '---\ntitle: "Test"\n---\n\n## The Hook\n\nContent.'
+    result = drafter._extract_draft(clean)
+    assert result == clean
