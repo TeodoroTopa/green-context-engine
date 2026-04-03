@@ -13,8 +13,10 @@ from pathlib import Path
 from anthropic import Anthropic
 
 from pipeline.monitors.rss_monitor import Story
+from pipeline.sources.base import BaseSource
 from pipeline.sources.ember import EmberSource
 from pipeline.usage import UsageTracker
+from pipeline.analysis.landscape import analyze_landscape
 from pipeline.analysis.ripple import analyze_ripple_effects
 from pipeline.analysis.tradeoffs import analyze_tradeoffs
 
@@ -36,15 +38,19 @@ class EnrichedStory:
     suggested_angles: list[str] = field(default_factory=list)
     ripple_effects: list[str] = field(default_factory=list)
     tradeoffs: list[dict] = field(default_factory=list)
+    landscape: dict = field(default_factory=dict)
+    eia_data: dict = field(default_factory=dict)
 
 
 class Enricher:
     """Enriches stories with energy data and Claude-powered analysis."""
 
-    def __init__(self, ember: EmberSource, client: Anthropic, model: str = "claude-sonnet-4-6"):
+    def __init__(self, ember: EmberSource, client, model: str = "claude-sonnet-4-6",
+                 extra_sources: list[BaseSource] | None = None):
         self.ember = ember
         self.client = client
         self.model = model
+        self.extra_sources = extra_sources or []
         self._countries = self._load_countries()
 
     def _load_countries(self) -> dict[str, str]:
@@ -61,10 +67,13 @@ class Enricher:
             logger.info("No local entity match, falling back to Claude")
             entities = self._extract_entities_claude(story, tracker)
         ember_data = self._fetch_data(entities)
+        extra_data = self._fetch_extra_sources(entities)
 
         # Only call Claude for analysis if we have actual data to analyze
         if ember_data:
             data_text = self._format_data(ember_data)
+            if extra_data:
+                data_text += "\n\n" + self._format_extra_data(extra_data)
             data_summary, angles = self._analyze(story, ember_data, tracker)
             ripple = analyze_ripple_effects(
                 self.client, self.model,
@@ -74,11 +83,16 @@ class Enricher:
                 self.client, self.model,
                 story.title, story.summary, data_text, tracker,
             )
+            landscape_data = analyze_landscape(
+                self.client, self.model,
+                story.title, story.summary, data_text, tracker,
+            )
         else:
             data_summary = ""
             angles = []
             ripple = []
             tradeoff_list = []
+            landscape_data = {}
 
         return EnrichedStory(
             story=story,
@@ -88,6 +102,8 @@ class Enricher:
             suggested_angles=angles,
             ripple_effects=ripple,
             tradeoffs=tradeoff_list,
+            landscape=landscape_data,
+            eia_data=extra_data,
         )
 
     def _extract_entities_local(self, story: Story) -> list[str]:
@@ -127,6 +143,35 @@ class Enricher:
         except json.JSONDecodeError:
             logger.warning(f"Could not parse entities from Claude response: {text}")
         return ["World"]
+
+    def _fetch_extra_sources(self, entities: list[str]) -> dict:
+        """Pull data from extra sources (EIA, etc.) for each entity."""
+        all_data = {}
+        for source in self.extra_sources:
+            source_name = type(source).__name__
+            for entity in entities:
+                try:
+                    result = source.get_generation_context(entity)
+                    if result.get("generation"):
+                        all_data.setdefault(entity, {})[source_name] = result
+                except Exception as e:
+                    logger.warning(f"Failed to fetch {source_name} data for '{entity}': {e}")
+        return all_data
+
+    def _format_extra_data(self, extra_data: dict) -> str:
+        """Format extra source data into readable text for the prompt."""
+        parts = []
+        for entity, sources in extra_data.items():
+            for source_name, data in sources.items():
+                lines = [f"### {entity} ({source_name})"]
+                for r in data.get("generation", [])[:20]:  # cap to avoid huge prompts
+                    fuel = r.get("fuel_type", r.get("fuel_description", "?"))
+                    value = r.get("value", "?")
+                    unit = r.get("unit", "")
+                    period = r.get("period", "?")
+                    lines.append(f"  {fuel} ({period}): {value} {unit}")
+                parts.append("\n".join(lines))
+        return "\n\n".join(parts)
 
     def _fetch_data(self, entities: list[str]) -> dict:
         """Pull Ember data for each entity."""

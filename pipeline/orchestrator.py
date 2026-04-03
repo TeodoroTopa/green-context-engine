@@ -19,6 +19,7 @@ from pipeline.claude_code_client import ClaudeCodeClient
 from pipeline.generation.drafter import Drafter
 from pipeline.monitors.rss_monitor import RSSMonitor
 from pipeline.publishing.notion import NotionPublisher
+from pipeline.sources.eia import EIASource
 from pipeline.sources.ember import EmberSource
 from pipeline.usage import UsageTracker
 
@@ -36,7 +37,13 @@ class Pipeline:
             self.client = ClaudeCodeClient()
         else:
             self.client = Anthropic()
-        self.enricher = Enricher(self.ember, self.client)
+        # Extra data sources — EIA is optional (needs EIA_API_KEY)
+        extra_sources = []
+        eia_key = os.getenv("EIA_API_KEY")
+        if eia_key:
+            extra_sources.append(EIASource(api_key=eia_key))
+            logger.info("EIA source enabled")
+        self.enricher = Enricher(self.ember, self.client, extra_sources=extra_sources)
         self.drafter = Drafter(self.client)
         # Notion is optional — skip if no token configured
         try:

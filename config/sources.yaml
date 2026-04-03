@@ -14,3 +14,10 @@ ember:
     demand_yearly: electricity-demand/yearly
     demand_monthly: electricity-demand/monthly
     capacity_monthly: installed-capacity/monthly
+
+eia:
+  base_url: https://api.eia.gov/v2
+  cache_ttl: 86400  # 24 hours
+  endpoints:
+    us_generation: electricity/electric-power-operational-data/data
+    international: international/data

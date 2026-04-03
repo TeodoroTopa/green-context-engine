@@ -43,6 +43,22 @@ def _format_tradeoffs(tradeoffs: list[dict]) -> str:
     return "\n\n".join(parts)
 
 
+def _format_landscape(landscape: dict) -> str:
+    """Format landscape analysis for the prompt."""
+    if not landscape:
+        return "No pre-analyzed landscape data available."
+    parts = []
+    if landscape.get("key_players"):
+        parts.append("Key players:\n" + "\n".join(f"- {p}" for p in landscape["key_players"]))
+    if landscape.get("implementation_state"):
+        parts.append(f"Implementation state: {landscape['implementation_state']}")
+    if landscape.get("recent_developments"):
+        parts.append("Recent developments:\n" + "\n".join(f"- {d}" for d in landscape["recent_developments"]))
+    if landscape.get("policy_context"):
+        parts.append(f"Policy context: {landscape['policy_context']}")
+    return "\n\n".join(parts) if parts else "No pre-analyzed landscape data available."
+
+
 def build_draft_prompt(enriched) -> str:
     """Build the user message for draft generation.
 
@@ -52,6 +68,7 @@ def build_draft_prompt(enriched) -> str:
     angles_text = "\n".join(f"- {a}" for a in enriched.suggested_angles)
     ripple_text = _format_ripple_effects(enriched.ripple_effects)
     tradeoffs_text = _format_tradeoffs(enriched.tradeoffs)
+    landscape_text = _format_landscape(enriched.landscape)
 
     # Use actual source name, not hardcoded Mongabay
     source_name = enriched.story.source.capitalize() if enriched.story.source else "Source"
@@ -74,6 +91,9 @@ Summary: {enriched.story.summary}
 ## Pre-Analyzed Trade-Offs
 {tradeoffs_text}
 
+## Pre-Analyzed Landscape
+{landscape_text}
+
 REMINDER: Use only the numbers from the Data Summary and Story above. If data is limited,
 write a shorter brief and note the gaps. The ripple effects and trade-offs above are
 pre-analyzed — incorporate them into the relevant sections, but verify any numbers
@@ -86,9 +106,10 @@ against the Data Summary before using them.
 Write in markdown. Use this structure (skip sections that don't apply):
 1. **The Hook** — the specific event or data point (REQUIRED)
 2. **The Data Context** — relevant numbers from sources (REQUIRED — only from data above)
-3. **The Ripple Effects** — second/third-order consequences (use pre-analyzed effects above)
-4. **The Trade-Offs** — what's gained and lost (use pre-analyzed trade-offs above)
-5. **The Take** — editorial perspective earned through the preceding evidence
+3. **The Landscape** — who's working on this, what stage (use pre-analyzed landscape above)
+4. **The Ripple Effects** — second/third-order consequences (use pre-analyzed effects above)
+5. **The Trade-Offs** — what's gained and lost (use pre-analyzed trade-offs above)
+6. **The Take** — editorial perspective earned through the preceding evidence
 
 Start with YAML frontmatter:
 ---

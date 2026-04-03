@@ -74,13 +74,13 @@ pytest tests/
 
 ## Current Status
 
-**Phases 1-2 complete, Phase 3-4 ~70% done. Notion content bug fixed. Dev mode added.**
+**Phases 1-3 complete, Phase 4 ~80% done. Multi-source enrichment working.**
 
-Done: Ember connector, cache, RSS monitor (Mongabay + Carbon Brief configured), enricher (local NER + Claude fallback), ripple effects + trade-offs analysis, drafter, orchestrator, CLI, token usage tracking, Notion publisher (metadata + full body content), editorial review skill, Claude Code proxy for dev testing. 33 tests.
+Done: Ember connector, EIA connector (US + international), cache, RSS monitor (Mongabay + Carbon Brief), enricher with multi-source support, ripple effects + trade-offs + landscape analysis, drafter with full post structure, orchestrator, CLI, token usage tracking, Notion publisher (metadata + full body content), editorial review skill, Claude Code proxy for dev testing. 39 tests.
 Run: `python scripts/run_pipeline.py --source mongabay` | Dev mode: set `PIPELINE_MODE=dev` in `.env` to route Claude calls through claude CLI (uses Claude Code subscription, not API billing). Review: invoke `/energy-editorial-review` on a draft file.
-Env vars: `ANTHROPIC_API_KEY`, `EMBER_API_KEY` (free — ember-energy.org/data/api), `NOTION_TOKEN` (optional), `PIPELINE_MODE` (optional — set to `dev` for testing).
+Env vars: `ANTHROPIC_API_KEY`, `EMBER_API_KEY` (free — ember-energy.org/data/api), `EIA_API_KEY` (free — eia.gov/opendata/register.php), `NOTION_TOKEN` (optional), `PIPELINE_MODE` (optional — set to `dev` for testing).
 Key rule: pipeline skips stories with no Ember data. Drafts must never contain stats not from the provided data or source article.
-Missing from master plan: EIA connector (`pipeline/sources/eia.py`), landscape analysis (`pipeline/analysis/landscape.py`), automated quality gate. Ember API key still returning 403.
+Missing from master plan: automated quality gate (editorial skill exists but not wired as pipeline step). Ember API returning 403 — may need key renewal.
 
 ## Notes for Claude Code
 

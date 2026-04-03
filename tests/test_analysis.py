@@ -1,7 +1,8 @@
-"""Tests for ripple effects and trade-offs analysis modules."""
+"""Tests for ripple effects, trade-offs, and landscape analysis modules."""
 
 from unittest.mock import MagicMock
 
+from pipeline.analysis.landscape import analyze_landscape
 from pipeline.analysis.ripple import analyze_ripple_effects
 from pipeline.analysis.tradeoffs import analyze_tradeoffs
 from pipeline.analysis.utils import strip_code_fences
@@ -107,3 +108,37 @@ def test_ripple_effects_tracks_usage():
 
     tracker.track.assert_called_once()
     assert tracker.track.call_args.args[1] == "ripple_effects"
+
+
+def test_landscape_parses_structured_json():
+    """analyze_landscape returns a dict with key_players, implementation_state, etc."""
+    client = MagicMock()
+    client.messages.create.return_value = _mock_response(
+        '{"key_players": ["PLN — state utility"], '
+        '"implementation_state": "Early stage", '
+        '"recent_developments": ["New solar auction"], '
+        '"policy_context": "Feed-in tariff under review"}'
+    )
+
+    result = analyze_landscape(
+        client, "claude-sonnet-4-6",
+        "Indonesia solar push", "Government announces new targets.",
+        "Solar: 1.35 TWh",
+    )
+
+    assert result["key_players"] == ["PLN — state utility"]
+    assert result["implementation_state"] == "Early stage"
+    assert len(result["recent_developments"]) == 1
+    assert "tariff" in result["policy_context"]
+
+
+def test_landscape_handles_bad_json():
+    """analyze_landscape returns empty dict on malformed response."""
+    client = MagicMock()
+    client.messages.create.return_value = _mock_response("not json")
+
+    result = analyze_landscape(
+        client, "claude-sonnet-4-6", "Title", "Summary", "Data",
+    )
+
+    assert result == {}
