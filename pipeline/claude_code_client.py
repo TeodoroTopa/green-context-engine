@@ -65,6 +65,7 @@ class _Messages:
                 ["claude", "-p", prompt, "--output-format", "json"],
                 capture_output=True,
                 text=True,
+                encoding="utf-8",
                 timeout=120,
             )
             if result.returncode != 0:
