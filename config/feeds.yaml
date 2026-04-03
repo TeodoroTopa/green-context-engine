@@ -1,0 +1,11 @@
+# RSS feeds to monitor for energy/climate stories
+feeds:
+  - name: mongabay_energy
+    url: "https://news.mongabay.com/feed/?post_type=post&feedtype=bulletpoints&topic=energy"
+    source: mongabay
+  - name: mongabay_environment
+    url: "https://news.mongabay.com/feed/?post_type=post&feedtype=bulletpoints&topic=environment"
+    source: mongabay
+  - name: mongabay_climate
+    url: "https://news.mongabay.com/feed/?post_type=post&feedtype=bulletpoints&topic=climate-change"
+    source: mongabay
