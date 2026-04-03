@@ -81,7 +81,7 @@ Run: `python scripts/run_pipeline.py --source mongabay` | Dev mode: set `PIPELIN
 Env vars: `ANTHROPIC_API_KEY`, `EMBER_API_KEY` (free — ember-energy.org/data/api), `EIA_API_KEY` (free — eia.gov/opendata/register.php), `NOTION_TOKEN` (optional), `PIPELINE_MODE` (optional — set to `dev` for testing).
 Key rule: pipeline skips stories with no Ember data. Drafts must never contain stats not from the provided data or source article.
 Quality gate: drafts that pass get Notion status "Review"; those that fail stay "Drafted" with violations logged.
-Note: EIA covers US electricity only; Ember covers international. EIA international endpoint is petroleum-focused. Ember API returning 403 — may need key renewal.
+Note: EIA covers US electricity only; Ember covers international. EIA international endpoint is petroleum-focused.
 Next: Phase 5 (website integration) or Phase 6 (scheduling with `/schedule`).
 
 ## Notes for Claude Code
