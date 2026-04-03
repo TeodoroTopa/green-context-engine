@@ -13,6 +13,10 @@ import logging
 import sys
 from pathlib import Path
 
+# Fix Windows console encoding for Unicode output
+if sys.stdout.encoding != "utf-8":
+    sys.stdout.reconfigure(encoding="utf-8")
+
 from dotenv import load_dotenv
 
 # Add project root to path so imports work
