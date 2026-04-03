@@ -73,10 +73,10 @@ pytest tests/
 
 ## Current Status
 
-**Phase 1 in progress.** Ember connector + RSS monitor done.
+**Phase 1 in progress.** Ember, RSS monitor, enricher, and drafter done.
 
-Done: scaffolding, Ember API connector, file-based cache, RSS monitor with deduplication. 7 tests passing.
-Next: enricher (Claude-powered analysis) → drafter → orchestrator.
+Done: Ember connector, cache, RSS monitor, enricher (Claude entity extraction + data analysis), drafter (prompt templates, voice validation, markdown output). 11 tests passing.
+Next: orchestrator to wire everything end-to-end.
 
 ## Notes for Claude Code
 
