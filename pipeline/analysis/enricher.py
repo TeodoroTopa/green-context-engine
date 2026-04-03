@@ -68,10 +68,13 @@ class Enricher:
             entities = self._extract_entities_claude(story, tracker)
         ember_data = self._fetch_data(entities)
         extra_data = self._fetch_extra_sources(entities)
+        benchmarks = self._fetch_benchmarks()
 
         # Only call Claude for analysis if we have actual data to analyze
         if ember_data:
             data_text = self._format_data(ember_data)
+            if benchmarks:
+                data_text += "\n\n" + self._format_benchmarks(benchmarks)
             if extra_data:
                 data_text += "\n\n" + self._format_extra_data(extra_data)
             data_summary, angles = self._analyze(story, ember_data, tracker)
@@ -143,6 +146,21 @@ class Enricher:
         except json.JSONDecodeError:
             logger.warning(f"Could not parse entities from Claude response: {text}")
         return ["World"]
+
+    def _fetch_benchmarks(self) -> dict:
+        """Fetch global comparison benchmarks from Ember."""
+        try:
+            return self.ember.get_benchmarks()
+        except Exception as e:
+            logger.warning(f"Failed to fetch benchmarks: {e}")
+            return {}
+
+    def _format_benchmarks(self, benchmarks: dict) -> str:
+        """Format benchmark data for the prompt."""
+        lines = ["### Global Benchmarks (carbon intensity, Ember)"]
+        for group, data in benchmarks.items():
+            lines.append(f"  {group}: {data['gco2_per_kwh']} gCO2/kWh ({data['year']})")
+        return "\n".join(lines)
 
     def _fetch_extra_sources(self, entities: list[str]) -> dict:
         """Pull data from extra sources (EIA, etc.) for each entity."""

@@ -1,62 +1,62 @@
 """Prompt templates for energy intelligence briefs."""
 
 SYSTEM_PROMPT = """\
-You are an energy analyst drafting an intelligence brief for teodorotopa.com.
+You are an energy analyst writing tight intelligence briefs for teodorotopa.com.
 
-STRICT DATA RULE — this is the most important rule:
-- The ONLY numbers, statistics, and data points you may use are those that appear in the
-  "Data Summary" or "Story" sections provided to you. No exceptions.
-- Do NOT supplement with figures from your training data, even if you are confident they are correct.
-- If the provided data is thin, write a shorter brief that honestly states what data is available
-  and what is missing. A brief that says "data is limited" is better than one with made-up numbers.
-- When citing a number, name the source it came from (Ember, the article, etc.).
+TARGET: 300-400 words. No padding. Every sentence must earn its place.
 
-Other rules:
+STRICT DATA RULE:
+- ONLY use numbers from the "Data Summary" or "Story" sections provided.
+- Do NOT supplement with figures from your training data, ever.
+- When citing a number, name the source (Ember, the article, etc.).
+
+COMPARISON RULE:
+- When presenting a country's carbon intensity or generation mix, ALWAYS compare
+  to the global benchmarks provided. "680 gCO2/kWh" means nothing alone —
+  "680 gCO2/kWh, 44% above the global average of 471" tells a story.
+- Use the benchmarks (World, OECD, regional) to situate the data.
+
+STYLE:
+- Active voice, no filler, no throat-clearing
 - Interpret data — never just present a number alone
-- Connect seemingly unrelated trends
-- Present trade-offs: if something helps decarbonization but hurts habitat, say both
-- Use active voice and clear structure
-- NEVER use lazy adjectives ("unprecedented", "important", "critical") without earning them
-- NEVER make sweeping generalizations or flowery empty declarations
-- NEVER filter information toward a predetermined conclusion
+- One key trade-off per brief, stated plainly
+- No lazy adjectives (unprecedented, significant, critical) unless earned
+- No fluff phrases (in an era of, it is worth noting, needless to say)
 """
 
 
 def _format_ripple_effects(effects: list[str]) -> str:
     """Format ripple effects for the prompt."""
     if not effects:
-        return "No pre-analyzed ripple effects available."
+        return "None available."
     return "\n".join(f"- {e}" for e in effects)
 
 
 def _format_tradeoffs(tradeoffs: list[dict]) -> str:
     """Format trade-offs for the prompt."""
     if not tradeoffs:
-        return "No pre-analyzed trade-offs available."
+        return "None available."
     parts = []
     for t in tradeoffs:
         parts.append(
-            f"**{t.get('tension', 'Trade-off')}**\n"
-            f"  Gained: {t.get('gained', '?')}\n"
-            f"  Lost: {t.get('lost', '?')}"
+            f"**{t.get('tension', 'Trade-off')}**: "
+            f"Gained: {t.get('gained', '?')} / Lost: {t.get('lost', '?')}"
         )
-    return "\n\n".join(parts)
+    return "\n".join(parts)
 
 
 def _format_landscape(landscape: dict) -> str:
     """Format landscape analysis for the prompt."""
     if not landscape:
-        return "No pre-analyzed landscape data available."
+        return "None available."
     parts = []
     if landscape.get("key_players"):
-        parts.append("Key players:\n" + "\n".join(f"- {p}" for p in landscape["key_players"]))
+        parts.append("Players: " + ", ".join(landscape["key_players"]))
     if landscape.get("implementation_state"):
-        parts.append(f"Implementation state: {landscape['implementation_state']}")
-    if landscape.get("recent_developments"):
-        parts.append("Recent developments:\n" + "\n".join(f"- {d}" for d in landscape["recent_developments"]))
+        parts.append(f"State: {landscape['implementation_state']}")
     if landscape.get("policy_context"):
-        parts.append(f"Policy context: {landscape['policy_context']}")
-    return "\n\n".join(parts) if parts else "No pre-analyzed landscape data available."
+        parts.append(f"Policy: {landscape['policy_context']}")
+    return "\n".join(parts) if parts else "None available."
 
 
 def build_draft_prompt(enriched) -> str:
@@ -70,48 +70,36 @@ def build_draft_prompt(enriched) -> str:
     tradeoffs_text = _format_tradeoffs(enriched.tradeoffs)
     landscape_text = _format_landscape(enriched.landscape)
 
-    # Use actual source name, not hardcoded Mongabay
     source_name = enriched.story.source.capitalize() if enriched.story.source else "Source"
 
     return f"""\
-Write an energy intelligence brief using ONLY the story and data below.
-You must not introduce any numbers or statistics beyond what appears in these sections.
+Write a 300-400 word energy intelligence brief. No longer. Every sentence must add information.
 
 ## Story
 Title: {enriched.story.title}
 Source: {source_name} ({enriched.story.url})
 Summary: {enriched.story.summary}
 
-## Data Summary (from Ember API)
+## Data Summary (from Ember API — includes global benchmarks for comparison)
 {enriched.data_summary}
 
-## Pre-Analyzed Ripple Effects
-{ripple_text}
+## Pre-Analyzed Context
+Ripple effects: {ripple_text}
+Trade-offs: {tradeoffs_text}
+Landscape: {landscape_text}
+Suggested angles: {angles_text}
 
-## Pre-Analyzed Trade-Offs
-{tradeoffs_text}
-
-## Pre-Analyzed Landscape
-{landscape_text}
-
-REMINDER: Use only the numbers from the Data Summary and Story above. If data is limited,
-write a shorter brief and note the gaps. The ripple effects and trade-offs above are
-pre-analyzed — incorporate them into the relevant sections, but verify any numbers
-against the Data Summary before using them.
-
-## Suggested Angles
-{angles_text}
+## Rules
+- 300-400 words MAXIMUM. This is a hard limit.
+- Use ONLY numbers from the Data Summary and Story above.
+- ALWAYS compare country data to global benchmarks when available.
+- Pick ONE ripple effect and ONE trade-off — the most important ones. Skip the rest.
+- No section headers. Write as continuous prose with paragraph breaks.
+- Do not repeat the headline in the opening sentence.
 
 ## Output Format
-Write in markdown. Use this structure (skip sections that don't apply):
-1. **The Hook** — the specific event or data point (REQUIRED)
-2. **The Data Context** — relevant numbers from sources (REQUIRED — only from data above)
-3. **The Landscape** — who's working on this, what stage (use pre-analyzed landscape above)
-4. **The Ripple Effects** — second/third-order consequences (use pre-analyzed effects above)
-5. **The Trade-Offs** — what's gained and lost (use pre-analyzed trade-offs above)
-6. **The Take** — editorial perspective earned through the preceding evidence
+Start with YAML frontmatter, then the brief as continuous prose (no ## headers):
 
-Start with YAML frontmatter:
 ---
 title: "..."
 date: {enriched.story.published or "YYYY-MM-DD"}
@@ -122,4 +110,6 @@ sources:
     url: https://ember-energy.org
 status: draft
 ---
+
+[300-400 words of tight, data-grounded analysis with global comparisons]
 """

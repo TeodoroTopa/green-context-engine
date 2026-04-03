@@ -98,6 +98,27 @@ class EmberSource(BaseSource):
             "carbon_intensity": carbon.get("data", []),
         }
 
+    def get_benchmarks(self, start_date: str = "2023") -> dict[str, Any]:
+        """Get carbon intensity benchmarks for global comparison groups.
+
+        Returns:
+            Dict mapping group name to latest carbon intensity (gCO2/kWh).
+        """
+        benchmarks = {}
+        for group in ["World", "OECD", "G20", "Asia", "EU"]:
+            try:
+                data = self.fetch("carbon-intensity/yearly", entity=group, start_date=start_date)
+                records = data.get("data", [])
+                if records:
+                    latest = max(records, key=lambda x: x["date"])
+                    benchmarks[group] = {
+                        "gco2_per_kwh": latest.get("emissions_intensity_gco2_per_kwh"),
+                        "year": latest["date"],
+                    }
+            except Exception as e:
+                logger.warning(f"Failed to fetch benchmark for {group}: {e}")
+        return benchmarks
+
     def get_monthly_trend(self, entity: str, months: int = 12) -> dict[str, Any]:
         """Get recent monthly generation data for trend detection.
 
