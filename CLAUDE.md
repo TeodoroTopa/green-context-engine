@@ -74,13 +74,15 @@ pytest tests/
 
 ## Current Status
 
-**Phases 1-3 complete, Phase 4 ~80% done. Multi-source enrichment working.**
+**Phases 1-4 complete. Full pipeline with quality gate operational.**
 
-Done: Ember connector, EIA connector (US + international), cache, RSS monitor (Mongabay + Carbon Brief), enricher with multi-source support, ripple effects + trade-offs + landscape analysis, drafter with full post structure, orchestrator, CLI, token usage tracking, Notion publisher (metadata + full body content), editorial review skill, Claude Code proxy for dev testing. 39 tests.
+Done: Ember connector, EIA connector (US electricity data), cache, RSS monitor (Mongabay + Carbon Brief), multi-source enricher, ripple effects + trade-offs + landscape analysis, drafter (6-section briefs), automated quality gate (editorial checks in pipeline), orchestrator, CLI, token usage tracking, Notion publisher (metadata + full body content), editorial review skill, Claude Code proxy for dev testing. 43 tests.
 Run: `python scripts/run_pipeline.py --source mongabay` | Dev mode: set `PIPELINE_MODE=dev` in `.env` to route Claude calls through claude CLI (uses Claude Code subscription, not API billing). Review: invoke `/energy-editorial-review` on a draft file.
 Env vars: `ANTHROPIC_API_KEY`, `EMBER_API_KEY` (free — ember-energy.org/data/api), `EIA_API_KEY` (free — eia.gov/opendata/register.php), `NOTION_TOKEN` (optional), `PIPELINE_MODE` (optional — set to `dev` for testing).
 Key rule: pipeline skips stories with no Ember data. Drafts must never contain stats not from the provided data or source article.
-Missing from master plan: automated quality gate (editorial skill exists but not wired as pipeline step). Ember API returning 403 — may need key renewal.
+Quality gate: drafts that pass get Notion status "Review"; those that fail stay "Drafted" with violations logged.
+Note: EIA covers US electricity only; Ember covers international. EIA international endpoint is petroleum-focused. Ember API returning 403 — may need key renewal.
+Next: Phase 5 (website integration) or Phase 6 (scheduling with `/schedule`).
 
 ## Notes for Claude Code
 

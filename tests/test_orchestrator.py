@@ -51,6 +51,7 @@ def test_pipeline_runs_end_to_end(mock_dotenv, mock_yaml, mock_monitor_cls, mock
         make_response('{"tradeoffs": [{"tension": "cost", "gained": "cheaper power", "lost": "jobs"}]}'),
         make_response('{"key_players": [], "implementation_state": "Growing", "recent_developments": [], "policy_context": ""}'),
         make_response("---\ntitle: Test\nstatus: draft\n---\n\n## The Hook\n\nTest content."),
+        make_response('{"pass": true, "violations": [], "summary": "Clean."}'),
     ]
     mock_anthropic_cls.return_value = mock_client
 

@@ -17,6 +17,7 @@ from dotenv import load_dotenv
 from pipeline.analysis.enricher import Enricher
 from pipeline.claude_code_client import ClaudeCodeClient
 from pipeline.generation.drafter import Drafter
+from pipeline.generation.quality_gate import run_quality_gate
 from pipeline.monitors.rss_monitor import RSSMonitor
 from pipeline.publishing.notion import NotionPublisher
 from pipeline.sources.eia import EIASource
@@ -97,9 +98,18 @@ class Pipeline:
                 draft_path = self.drafter.draft(enriched, tracker)
                 drafts.append(draft_path)
                 logger.info(f"Drafted: {draft_path.name}")
+
+                # Quality gate
+                qg = run_quality_gate(self.client, self.drafter.model, draft_path, tracker)
+                if qg["pass"]:
+                    logger.info(f"Quality gate PASSED: {draft_path.name}")
+                else:
+                    logger.warning(f"Quality gate: {qg['summary']}")
+
                 logger.info(f"  {tracker.summary()}")
                 if self.notion and notion_page_id:
-                    self.notion.update_status(notion_page_id, "Drafted")
+                    status = "Review" if qg["pass"] else "Drafted"
+                    self.notion.update_status(notion_page_id, status)
                     self.notion.append_content(notion_page_id, draft_path)
 
                 # merge per-story calls into run total
