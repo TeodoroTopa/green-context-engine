@@ -17,7 +17,7 @@ from pipeline.publishing.notion import NotionPublisher
 
 logger = logging.getLogger(__name__)
 
-WEBSITE_REPO = "TeodoroTopa/simple-developer-portfolio-website"
+WEBSITE_REPO = "TeodoroTopa/teodorotopa_personal_website"
 WEBSITE_CONTENT_PATH = "content/energy"
 GITHUB_API = "https://api.github.com"
 
