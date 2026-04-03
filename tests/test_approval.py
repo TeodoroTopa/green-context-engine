@@ -2,12 +2,22 @@
 
 from unittest.mock import MagicMock, patch
 
-from pipeline.publishing.approval import process_approved
+from pipeline.publishing.approval import process_approved, _slugify
 
 
-@patch("pipeline.publishing.approval.publish_to_website", return_value=True)
+def test_slugify():
+    """_slugify matches the drafter's filename convention."""
+    assert _slugify("Solar Surge in Germany!") == "solar-surge-in-germany"
+    assert _slugify("Indonesia's Deforestation") == "indonesia-s-deforestation"
+    long_title = "A" * 100
+    assert len(_slugify(long_title)) <= 50
+
+
+@patch("pipeline.publishing.approval.publish_to_website")
 def test_process_approved_reads_from_notion(mock_publish):
     """process_approved reads content from Notion and publishes."""
+    mock_publish.return_value = {"success": True, "pr_url": "https://github.com/pr/1", "error": None}
+
     notion = MagicMock()
     notion.get_pages_by_status.return_value = [
         {"id": "page-1", "title": "Test Story", "url": "", "source": "Mongabay"}
@@ -19,10 +29,27 @@ def test_process_approved_reads_from_notion(mock_publish):
 
     assert len(results) == 1
     assert results[0]["status"] == "published"
-    assert results[0]["content_length"] > 0
+    assert results[0]["pr_url"] == "https://github.com/pr/1"
     notion.get_page_as_markdown.assert_called_once_with("page-1")
     notion.update_status.assert_called_once_with("page-1", "Published")
-    mock_publish.assert_called_once_with("Test Story", notion.get_page_as_markdown.return_value)
+
+
+@patch("pipeline.publishing.approval.publish_to_website")
+def test_process_approved_skips_publish_on_failure(mock_publish):
+    """process_approved does not update Notion if publish fails."""
+    mock_publish.return_value = {"success": False, "pr_url": None, "error": "API error"}
+
+    notion = MagicMock()
+    notion.get_pages_by_status.return_value = [
+        {"id": "page-1", "title": "Test Story", "url": "", "source": ""}
+    ]
+    notion.get_page_as_markdown.return_value = "---\ntitle: Test\n---\n\nContent."
+
+    results = process_approved(notion)
+
+    assert len(results) == 1
+    assert "publish_failed" in results[0]["status"]
+    notion.update_status.assert_not_called()
 
 
 def test_process_approved_handles_empty_content():
