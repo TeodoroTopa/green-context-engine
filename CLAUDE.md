@@ -2,92 +2,127 @@
 
 ## What This Project Is
 
-An automated AI pipeline that monitors renewable energy news and public data sources, enriches stories with data and analysis, and publishes "energy intelligence briefs" on teodorotopa.com. Runs daily, identifies noteworthy developments, gathers data context from APIs, traces ripple effects, and drafts posts for human review before publishing.
+An automated AI pipeline that monitors renewable energy news, enriches stories with data from multiple APIs, and publishes "energy intelligence briefs" on teodorotopa.com. An AI data strategist picks which data to fetch per article, an editor agent fact-checks drafts against source data, and a revision loop auto-corrects errors before publishing.
 
-NOT a generic AI blog. Every post grounded in certified data, connecting trends, presenting trade-offs honestly. No fluff, no sweeping generalizations, no assertions without evidence.
+NOT a generic AI blog. Every post grounded in certified data, comparing countries to regional/global benchmarks, presenting trade-offs honestly. No fluff, no assertions without evidence.
 
 ## Architecture
 
-`pipeline/sources/` → data connectors (one per source) | `pipeline/monitors/` → RSS + data monitoring | `pipeline/analysis/` → enrichment, ripple effects, trade-offs | `pipeline/generation/` → drafting + prompts + voice validation | `pipeline/orchestrator.py` → wires it all together | `content/{drafts,approved,published}/` → review queue | `data/{cache,reference}/` → cached API responses | `config/` → YAML configs | `tests/` + `scripts/`
+```
+RSS feeds → Monitor (keyword filter + dedup)
+         → Data Strategist (AI picks which APIs/entities to query)
+         → Enricher (fetches from Ember/EIA based on strategist plan)
+         → Drafter (300-400 word brief with benchmark comparisons)
+         → Editor (fact-checks draft against source data)
+         → Revision loop (max 2 attempts to fix errors)
+         → Notion (editorial queue + full content)
+         → Approval (you mark "Approved" in Notion)
+         → GitHub API push to website repo → live on teodorotopa.com
+```
 
-Publishing: Option C (MVP) — pipeline outputs markdown, manually copy to website repo. Graduate to GitHub API push once stable.
-
-## Tech Stack
-
-Python 3.11+, Claude API (Anthropic SDK), requests, pandas, feedparser, pytest, pyyaml, python-dotenv
+Key directories:
+- `pipeline/sources/` — data connectors (Ember, EIA; follows BaseSource interface)
+- `pipeline/monitors/` — RSS feed parsing + keyword filtering
+- `pipeline/analysis/` — data strategist, catalog loader, enricher
+- `pipeline/generation/` — drafter, editor, voice checker, prompts
+- `pipeline/publishing/` — Notion API, approval polling, GitHub publishing
+- `config/data_catalog/` — YAML catalogs describing each data source's entities
+- `config/` — feeds.yaml, sources.yaml, publishing.yaml
+- `tests/` — 63 tests covering all modules
 
 ## Data Sources
 
-**Phase 1 (MVP):** Ember API (electricity data, carbon intensity) + Mongabay RSS (environmental journalism)
-**Phase 2:** EIA Open Data API + Carbon Brief RSS
-**Phase 3:** Electricity Maps API + Global Forest Watch API
-**Phase 4:** IUCN Red List + NOAA Climate Data
+### Implemented
+- **Ember API** — global electricity generation, carbon intensity, emissions for ~200 entities (countries, regions, economic groups like OECD/G20/ASEAN)
+- **EIA Open Data API** — US electricity generation by fuel type (national + state level)
+- **Mongabay RSS** — 3 feeds (energy, environment, climate-change)
+- **Carbon Brief RSS** — configured in feeds.yaml
+
+### Adding a New Source
+1. Drop a YAML in `config/data_catalog/` describing entities and data types
+2. Create a connector in `pipeline/sources/` extending `BaseSource`
+3. Register it in `pipeline/orchestrator.py` (check env var, add to sources dict)
+4. The data strategist auto-discovers new catalogs — no prompt changes needed
+
+### Planned
+- Electricity Maps API, Global Forest Watch, IUCN Red List, NOAA Climate Data
+
+## Agent Pipeline (per story)
+
+| Agent | Role | Claude calls |
+|-------|------|-------------|
+| **Data Strategist** | Reads article + all catalogs, picks which sources/entities to fetch | 1 |
+| **Analyzer** | Summarizes data, suggests angles | 1 |
+| **Drafter** | Writes 300-400 word brief with benchmark comparisons | 1 |
+| **Editor** | Fact-checks draft against source data + story | 1 per attempt |
+| **Reviser** | Fixes editor-flagged errors | 0-2 (only if editor fails) |
+
+Total: 4-7 Claude calls per story (was 6-7 before refactor).
 
 ## Editorial Guidelines
 
 ### Always
 - Ground every claim in data from a named, verifiable source
+- Compare country data to global/regional benchmarks (World, OECD, ASEAN, etc.)
 - Interpret data — never just present a number alone
-- Connect seemingly unrelated trends (energy → land use → biodiversity → economics)
-- Present trade-offs honestly; show WHY something matters
-- Active voice, clear structure
+- Present trade-offs honestly; one key trade-off per brief
+- Explicitly state data years when they differ from story year
+- Active voice, continuous prose (no section headers), 300-400 words
 
 ### Never
-- Lazy adjectives without earning them ("unprecedented," "important," "critical")
-- Sweeping generalizations, single anecdotes as universal proof
-- Flowery empty declarations, jargon without context
-- Filtering information toward a predetermined conclusion
-
-### Post Structure
-1. **The Hook** — specific event/data point (REQUIRED)
-2. **The Data Context** — numbers from certified sources (REQUIRED)
-3. **The Landscape** — who's working on this, what stage
-4. **The Ripple Effects** — second/third-order consequences
-5. **The Trade-Offs** — what's gained and lost, with data
-6. **The Take** — editorial perspective earned through evidence
-
-## Development Principles
-
-- **Build incrementally** — one source → one analysis → one draft before adding complexity
-- **Test each connector independently** — every module gets tests
-- **Cache aggressively** — file-based caching with TTL to respect rate limits
-- **Human in the loop** — pipeline drafts, Teo approves, nothing auto-publishes
-- **Fail gracefully** — log and skip on errors, don't crash the pipeline
-- **Version the prompts** — templates in `generation/prompts/` evolve over time
-- **Update relevance keywords when adding data sources** — `config/feeds.yaml` keyword list must reflect what we can actually contextualize with data. New source = new keywords.
+- Lazy adjectives without evidence ("unprecedented," "significant," "critical")
+- Sweeping generalizations or flowery declarations
+- Claims not traceable to the provided data or story
+- Oversimplifications that change the meaning of trends
 
 ## Commands
 
 ```bash
-python -m venv venv && source venv/Scripts/activate  # Windows
+source venv/Scripts/activate  # Windows
 pip install -r requirements.txt
-cp .env.example .env  # fill in API keys
-python scripts/run_pipeline.py [--source ember|mongabay]
+
+# Run pipeline (dev mode uses Claude Code subscription, not API billing)
+PIPELINE_MODE=dev python scripts/run_pipeline.py --source mongabay --max-stories 1
+
+# Publish approved drafts from Notion to website
+python scripts/publish_approved.py         # for real
+python scripts/publish_approved.py --dry-run  # preview only
+
+# Tests
 pytest tests/
 ```
 
-## MCP & Skills
+## Environment Variables
 
-- **Notion** — editorial queue tracking via direct API (`pipeline/publishing/notion.py`), also available via MCP in Claude Code
-- **`/schedule`** — daily pipeline automation
-- **`/skill-creator`** — custom editorial review skill (stored in `.claude/skills/`)
+| Variable | Required | Purpose |
+|----------|----------|---------|
+| `ANTHROPIC_API_KEY` | Yes (prod) | Claude API for production runs |
+| `EMBER_API_KEY` | Yes | Ember electricity data (free — ember-energy.org) |
+| `EIA_API_KEY` | Yes | EIA US electricity data (free — eia.gov/opendata/register.php) |
+| `NOTION_TOKEN` | Optional | Editorial queue in Notion |
+| `WEBSITE_GITHUB_TOKEN` | Optional | Publishes posts to website repo via GitHub API |
+| `PIPELINE_MODE` | Optional | Set to `dev` to route Claude calls through claude CLI |
+
+## Publishing Flow
+
+1. Pipeline runs → draft appears in Notion as "Drafted" or "Review"
+2. Notion is the single source of truth — no local files needed
+3. You change status to "Approved" in Notion (from phone or browser)
+4. `publish_approved.py` reads content from Notion, commits to `TeodoroTopa/teodorotopa_personal_website` on main
+5. Vercel auto-rebuilds, post live at teodorotopa.com/energy/[slug] within ~60 seconds
+6. Duplicate prevention: checks Notion for existing URL before creating pages; updates existing files on republish
 
 ## Current Status
 
-**Phases 1-4 complete. Full pipeline with quality gate operational.**
+**Phases 1-5 complete. Smart data agent + editor with revision loop operational. 63 tests.**
 
-Done: Ember connector, EIA connector (US electricity data), cache, RSS monitor (Mongabay + Carbon Brief), multi-source enricher, ripple effects + trade-offs + landscape analysis, drafter (6-section briefs), automated quality gate (editorial checks in pipeline), orchestrator, CLI, token usage tracking, Notion publisher (metadata + full body content), editorial review skill, Claude Code proxy for dev testing. 43 tests.
-Run: `python scripts/run_pipeline.py --source mongabay` | Dev mode: set `PIPELINE_MODE=dev` in `.env` to route Claude calls through claude CLI (uses Claude Code subscription, not API billing). Review: invoke `/energy-editorial-review` on a draft file.
-Env vars: `ANTHROPIC_API_KEY`, `EMBER_API_KEY` (free — ember-energy.org/data/api), `EIA_API_KEY` (free — eia.gov/opendata/register.php), `NOTION_TOKEN` (optional), `PIPELINE_MODE` (optional — set to `dev` for testing).
-Key rule: pipeline skips stories with no Ember data. Drafts must never contain stats not from the provided data or source article.
-Quality gate: drafts that pass get Notion status "Review"; those that fail stay "Drafted" with violations logged.
-Note: EIA covers US electricity only; Ember covers international. EIA international endpoint is petroleum-focused.
-Next: Phase 5 (website integration) or Phase 6 (scheduling with `/schedule`).
+Next: Phase 6 (scheduling with `/schedule` — autonomous daily runs) or more news sources.
 
 ## Notes for Claude Code
 
-- Teo has strong Python/data-science background, new to Claude Code — explain Claude Code specifics
+- Teo has strong Python/data-science background — skip basic explanations
 - Prefer simple, readable code over clever abstractions
-- Every new module comes with tests; new data sources follow the ember.py pattern
-- Prompt templates reference Editorial Guidelines above
+- Every new module comes with tests
+- New data sources: add YAML to `config/data_catalog/`, connector to `pipeline/sources/`
 - If a design decision has trade-offs, explain them and let Teo choose
+- Commit at every working checkpoint for easy rollback
