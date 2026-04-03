@@ -23,7 +23,7 @@ NOTION_VERSION = "2022-06-28"
 
 
 class NotionPublisher:
-    """Pushes draft metadata to the Notion editorial queue."""
+    """Pushes drafts and metadata to the Notion editorial queue."""
 
     def __init__(self, database_id: str | None = None, token: str | None = None):
         self.token = token or os.getenv("NOTION_TOKEN")
@@ -163,6 +163,134 @@ class NotionPublisher:
         except requests.RequestException as e:
             logger.error(f"Failed to push to Notion: {e}")
             return None
+
+    def append_content(self, page_id: str, draft_path: Path) -> bool:
+        """Append the draft body as content blocks to an existing Notion page.
+
+        Args:
+            page_id: The Notion page ID.
+            draft_path: Path to the saved draft markdown file.
+
+        Returns:
+            True if successful.
+        """
+        body = self._extract_body(draft_path)
+        if not body:
+            logger.warning(f"No body content found in {draft_path}")
+            return False
+
+        blocks = self._markdown_to_blocks(body)
+        if not blocks:
+            return False
+
+        payload = {"children": blocks}
+        try:
+            resp = requests.patch(
+                f"{NOTION_API}/blocks/{page_id}/children",
+                headers=self.headers,
+                json=payload,
+                timeout=30,
+            )
+            resp.raise_for_status()
+            logger.info(f"Appended {len(blocks)} content blocks to page {page_id}")
+            return True
+        except requests.RequestException as e:
+            logger.error(f"Failed to append content to Notion page: {e}")
+            return False
+
+    def _extract_body(self, path: Path) -> str:
+        """Extract the markdown body (everything after YAML frontmatter)."""
+        text = path.read_text(encoding="utf-8")
+        match = re.match(r"^---\s*\n.+?\n---\s*\n?", text, re.DOTALL)
+        if match:
+            return text[match.end():].strip()
+        return text.strip()
+
+    def _markdown_to_blocks(self, markdown: str) -> list[dict]:
+        """Convert markdown text to Notion block objects.
+
+        Handles: headings (##), bold (**), italic (*), dividers (---),
+        and plain paragraphs. Chunks rich text at 2000 chars per item.
+        """
+        blocks = []
+        for line in markdown.split("\n"):
+            stripped = line.strip()
+
+            # Skip empty lines
+            if not stripped:
+                continue
+
+            # Divider
+            if re.match(r"^---+$", stripped):
+                blocks.append({"object": "block", "type": "divider", "divider": {}})
+                continue
+
+            # Heading 2 (## ...)
+            heading_match = re.match(r"^##\s+(.+)", stripped)
+            if heading_match:
+                text = heading_match.group(1).strip()
+                blocks.append({
+                    "object": "block",
+                    "type": "heading_2",
+                    "heading_2": {"rich_text": self._parse_rich_text(text)},
+                })
+                continue
+
+            # Heading 3 (### ...)
+            heading3_match = re.match(r"^###\s+(.+)", stripped)
+            if heading3_match:
+                text = heading3_match.group(1).strip()
+                blocks.append({
+                    "object": "block",
+                    "type": "heading_3",
+                    "heading_3": {"rich_text": self._parse_rich_text(text)},
+                })
+                continue
+
+            # Regular paragraph
+            blocks.append({
+                "object": "block",
+                "type": "paragraph",
+                "paragraph": {"rich_text": self._parse_rich_text(stripped)},
+            })
+
+        return blocks
+
+    def _parse_rich_text(self, text: str) -> list[dict]:
+        """Parse markdown inline formatting into Notion rich text items.
+
+        Handles **bold** and *italic*. Chunks at 2000 chars per item.
+        """
+        items = []
+        # Split on bold (**...**) and italic (*...*)
+        # Pattern: match **bold**, *italic*, or plain text
+        pattern = r"(\*\*[^*]+?\*\*|\*[^*]+?\*)"
+        parts = re.split(pattern, text)
+
+        for part in parts:
+            if not part:
+                continue
+
+            annotations = {"bold": False, "italic": False}
+            content = part
+
+            if part.startswith("**") and part.endswith("**"):
+                content = part[2:-2]
+                annotations["bold"] = True
+            elif part.startswith("*") and part.endswith("*"):
+                content = part[1:-1]
+                annotations["italic"] = True
+
+            # Chunk at 2000 chars per Notion API limit
+            for i in range(0, len(content), 2000):
+                chunk = content[i:i + 2000]
+                items.append({
+                    "type": "text",
+                    "text": {"content": chunk},
+                    "annotations": annotations,
+                })
+
+        return items if items else [{"type": "text", "text": {"content": ""}}]
 
     def _parse_frontmatter(self, path: Path) -> dict:
         """Extract YAML frontmatter from a markdown file."""

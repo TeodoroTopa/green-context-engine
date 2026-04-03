@@ -74,13 +74,13 @@ pytest tests/
 
 ## Current Status
 
-**Phase 1 complete. First live run done. Hardening data integrity.**
+**Phases 1-2 complete, Phase 3-4 ~70% done. Notion content bug fixed. Dev mode added.**
 
-Done: Ember connector, cache, RSS monitor (keyword filter), enricher (local NER + Claude fallback), drafter, orchestrator, CLI, token usage tracking ($cost per draft), Notion API publisher (`pipeline/publishing/notion.py`), editorial review skill. 14 tests.
-Run: `python scripts/run_pipeline.py --source mongabay` | Review: invoke `/energy-editorial-review` on a draft file.
-Env vars needed: `ANTHROPIC_API_KEY`, `EMBER_API_KEY` (free — sign up at ember-energy.org/data/api), `NOTION_TOKEN` (optional — notion.so/my-integrations).
+Done: Ember connector, cache, RSS monitor (Mongabay + Carbon Brief configured), enricher (local NER + Claude fallback), ripple effects + trade-offs analysis, drafter, orchestrator, CLI, token usage tracking, Notion publisher (metadata + full body content), editorial review skill, Claude Code proxy for dev testing. 33 tests.
+Run: `python scripts/run_pipeline.py --source mongabay` | Dev mode: set `PIPELINE_MODE=dev` in `.env` to route Claude calls through claude CLI (uses Claude Code subscription, not API billing). Review: invoke `/energy-editorial-review` on a draft file.
+Env vars: `ANTHROPIC_API_KEY`, `EMBER_API_KEY` (free — ember-energy.org/data/api), `NOTION_TOKEN` (optional), `PIPELINE_MODE` (optional — set to `dev` for testing).
 Key rule: pipeline skips stories with no Ember data. Drafts must never contain stats not from the provided data or source article.
-Next: get Ember API key (currently 403), then Phase 2 data sources (EIA, Carbon Brief).
+Missing from master plan: EIA connector (`pipeline/sources/eia.py`), landscape analysis (`pipeline/analysis/landscape.py`), automated quality gate. Ember API key still returning 403.
 
 ## Notes for Claude Code
 

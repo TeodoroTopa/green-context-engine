@@ -15,6 +15,7 @@ from anthropic import Anthropic
 from dotenv import load_dotenv
 
 from pipeline.analysis.enricher import Enricher
+from pipeline.claude_code_client import ClaudeCodeClient
 from pipeline.generation.drafter import Drafter
 from pipeline.monitors.rss_monitor import RSSMonitor
 from pipeline.publishing.notion import NotionPublisher
@@ -30,7 +31,11 @@ class Pipeline:
     def __init__(self):
         load_dotenv()
         self.ember = EmberSource(api_key=os.getenv("EMBER_API_KEY"))
-        self.client = Anthropic()
+        if os.getenv("PIPELINE_MODE") == "dev":
+            logger.info("Dev mode: routing Claude calls through claude CLI")
+            self.client = ClaudeCodeClient()
+        else:
+            self.client = Anthropic()
         self.enricher = Enricher(self.ember, self.client)
         self.drafter = Drafter(self.client)
         # Notion is optional — skip if no token configured
@@ -88,6 +93,7 @@ class Pipeline:
                 logger.info(f"  {tracker.summary()}")
                 if self.notion and notion_page_id:
                     self.notion.update_status(notion_page_id, "Drafted")
+                    self.notion.append_content(notion_page_id, draft_path)
 
                 # merge per-story calls into run total
                 run_tracker.calls.extend(tracker.calls)
