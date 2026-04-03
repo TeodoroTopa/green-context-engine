@@ -19,44 +19,10 @@ COMPARISON RULE:
 STYLE:
 - Active voice, no filler, no throat-clearing
 - Interpret data — never just present a number alone
-- One key trade-off per brief, stated plainly
+- Identify one key trade-off and one second-order consequence
 - No lazy adjectives (unprecedented, significant, critical) unless earned
 - No fluff phrases (in an era of, it is worth noting, needless to say)
 """
-
-
-def _format_ripple_effects(effects: list[str]) -> str:
-    """Format ripple effects for the prompt."""
-    if not effects:
-        return "None available."
-    return "\n".join(f"- {e}" for e in effects)
-
-
-def _format_tradeoffs(tradeoffs: list[dict]) -> str:
-    """Format trade-offs for the prompt."""
-    if not tradeoffs:
-        return "None available."
-    parts = []
-    for t in tradeoffs:
-        parts.append(
-            f"**{t.get('tension', 'Trade-off')}**: "
-            f"Gained: {t.get('gained', '?')} / Lost: {t.get('lost', '?')}"
-        )
-    return "\n".join(parts)
-
-
-def _format_landscape(landscape: dict) -> str:
-    """Format landscape analysis for the prompt."""
-    if not landscape:
-        return "None available."
-    parts = []
-    if landscape.get("key_players"):
-        parts.append("Players: " + ", ".join(landscape["key_players"]))
-    if landscape.get("implementation_state"):
-        parts.append(f"State: {landscape['implementation_state']}")
-    if landscape.get("policy_context"):
-        parts.append(f"Policy: {landscape['policy_context']}")
-    return "\n".join(parts) if parts else "None available."
 
 
 def build_draft_prompt(enriched) -> str:
@@ -66,10 +32,6 @@ def build_draft_prompt(enriched) -> str:
         enriched: An EnrichedStory instance.
     """
     angles_text = "\n".join(f"- {a}" for a in enriched.suggested_angles)
-    ripple_text = _format_ripple_effects(enriched.ripple_effects)
-    tradeoffs_text = _format_tradeoffs(enriched.tradeoffs)
-    landscape_text = _format_landscape(enriched.landscape)
-
     source_name = enriched.story.source.capitalize() if enriched.story.source else "Source"
 
     return f"""\
@@ -80,20 +42,17 @@ Title: {enriched.story.title}
 Source: {source_name} ({enriched.story.url})
 Summary: {enriched.story.summary}
 
-## Data Summary (from Ember API — includes global benchmarks for comparison)
+## Data Summary (includes comparison benchmarks)
 {enriched.data_summary}
 
-## Pre-Analyzed Context
-Ripple effects: {ripple_text}
-Trade-offs: {tradeoffs_text}
-Landscape: {landscape_text}
-Suggested angles: {angles_text}
+## Suggested Angles
+{angles_text}
 
 ## Rules
 - 300-400 words MAXIMUM. This is a hard limit.
 - Use ONLY numbers from the Data Summary and Story above.
-- ALWAYS compare country data to global benchmarks when available.
-- Pick ONE ripple effect and ONE trade-off — the most important ones. Skip the rest.
+- ALWAYS compare country data to benchmarks when available.
+- Identify ONE key trade-off and ONE second-order consequence. Keep both brief.
 - No section headers. Write as continuous prose with paragraph breaks.
 - Do not repeat the headline in the opening sentence.
 
