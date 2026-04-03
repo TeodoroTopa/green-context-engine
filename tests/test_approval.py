@@ -77,6 +77,59 @@ def test_process_approved_no_approved_pages():
 
 
 @patch("pipeline.publishing.notion.requests")
+def test_find_page_by_url_returns_existing(mock_requests):
+    """find_page_by_url returns page ID when URL already exists."""
+    from pipeline.publishing.notion import NotionPublisher
+
+    mock_resp = MagicMock()
+    mock_resp.json.return_value = {
+        "results": [{"id": "page-existing"}]
+    }
+    mock_requests.post.return_value = mock_resp
+
+    pub = NotionPublisher(database_id="db-id", token="fake-token")
+    result = pub.find_page_by_url("https://example.com/article")
+
+    assert result == "page-existing"
+    call_payload = mock_requests.post.call_args.kwargs["json"]
+    assert call_payload["filter"]["property"] == "userDefined:URL"
+    assert call_payload["filter"]["url"]["equals"] == "https://example.com/article"
+
+
+@patch("pipeline.publishing.notion.requests")
+def test_find_page_by_url_returns_none_when_not_found(mock_requests):
+    """find_page_by_url returns None when no match."""
+    from pipeline.publishing.notion import NotionPublisher
+
+    mock_resp = MagicMock()
+    mock_resp.json.return_value = {"results": []}
+    mock_requests.post.return_value = mock_resp
+
+    pub = NotionPublisher(database_id="db-id", token="fake-token")
+    result = pub.find_page_by_url("https://example.com/new-article")
+
+    assert result is None
+
+
+@patch("pipeline.publishing.notion.requests")
+def test_create_story_skips_duplicate(mock_requests):
+    """create_story returns existing page ID if URL already in database."""
+    from pipeline.publishing.notion import NotionPublisher
+
+    # First call: query returns existing page. Second call: shouldn't happen.
+    query_resp = MagicMock()
+    query_resp.json.return_value = {"results": [{"id": "page-dup"}]}
+    mock_requests.post.return_value = query_resp
+
+    pub = NotionPublisher(database_id="db-id", token="fake-token")
+    result = pub.create_story("Test", source_url="https://example.com/existing")
+
+    assert result == "page-dup"
+    # Only one POST call (the query), not two (query + create)
+    assert mock_requests.post.call_count == 1
+
+
+@patch("pipeline.publishing.notion.requests")
 def test_get_pages_by_status(mock_requests):
     """get_pages_by_status queries Notion with a status filter."""
     from pipeline.publishing.notion import NotionPublisher

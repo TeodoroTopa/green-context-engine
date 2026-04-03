@@ -65,14 +65,27 @@ def publish_to_website(title: str, markdown: str, date_str: str = "") -> dict:
 
     try:
         content_b64 = base64.b64encode(markdown.encode("utf-8")).decode("ascii")
+        payload = {
+            "message": f"Publish: {title}",
+            "content": content_b64,
+            "branch": "main",
+        }
+
+        # Check if file already exists (need its SHA to update)
+        existing = requests.get(
+            f"{GITHUB_API}/repos/{WEBSITE_REPO}/contents/{file_path}",
+            headers=headers,
+            timeout=15,
+        )
+        if existing.status_code == 200:
+            payload["sha"] = existing.json()["sha"]
+            payload["message"] = f"Update: {title}"
+            logger.info(f"File exists — updating {filename}")
+
         resp = requests.put(
             f"{GITHUB_API}/repos/{WEBSITE_REPO}/contents/{file_path}",
             headers=headers,
-            json={
-                "message": f"Publish: {title}",
-                "content": content_b64,
-                "branch": "main",
-            },
+            json=payload,
             timeout=15,
         )
         resp.raise_for_status()

@@ -49,12 +49,54 @@ class NotionPublisher:
                 return db_id
         raise ValueError("No database_id found in config/publishing.yaml or constructor")
 
+    def find_page_by_url(self, url: str) -> str | None:
+        """Check if a page with this source URL already exists in the database.
+
+        Args:
+            url: The source article URL.
+
+        Returns:
+            The page ID if found, None otherwise.
+        """
+        if not url:
+            return None
+        payload = {
+            "filter": {
+                "property": "userDefined:URL",
+                "url": {"equals": url},
+            }
+        }
+        try:
+            resp = requests.post(
+                f"{NOTION_API}/databases/{self.database_id}/query",
+                headers=self.headers,
+                json=payload,
+                timeout=15,
+            )
+            resp.raise_for_status()
+            results = resp.json().get("results", [])
+            if results:
+                return results[0]["id"]
+            return None
+        except requests.RequestException as e:
+            logger.error(f"Failed to check for existing page: {e}")
+            return None
+
     def create_story(self, title: str, source_url: str = "", source_name: str = "", topics: list[str] | None = None) -> str | None:
         """Create a Notion page for a newly discovered story (status: Queued).
+
+        Checks for duplicates by source URL first. If a page with the same
+        URL already exists, returns its ID instead of creating a new one.
 
         Returns:
             The Notion page ID if successful, None otherwise.
         """
+        # Duplicate check
+        existing = self.find_page_by_url(source_url)
+        if existing:
+            logger.info(f"Page already exists for URL: {title} (page {existing})")
+            return existing
+
         properties = {
             "Story Title": {"title": [{"text": {"content": title}}]},
             "Status": {"select": {"name": "Queued"}},
