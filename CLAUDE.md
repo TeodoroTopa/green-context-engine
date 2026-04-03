@@ -73,11 +73,12 @@ pytest tests/
 
 ## Current Status
 
-**Phase 1 complete + alignment fixes in progress.**
+**Phase 1 complete + alignment fixes done.**
 
-Done: Ember connector, cache, RSS monitor (with keyword relevance filter), enricher, drafter, orchestrator, CLI. 13 tests.
+Done: Ember connector, cache, RSS monitor (keyword filter), enricher (local entity extraction + Claude fallback), drafter, orchestrator, CLI. Notion editorial queue created. 14 tests.
 Run with: `python scripts/run_pipeline.py --source mongabay`
-In progress: local entity extraction, Notion integration, editorial review skill.
+Notion: "Energy Editorial Queue" database with board view. Notion updates happen via MCP in Claude Code sessions (not from standalone Python).
+Next: editorial review skill via /skill-creator.
 
 ## Notes for Claude Code
 
