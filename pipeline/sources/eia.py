@@ -118,67 +118,48 @@ class EIASource(BaseSource):
         return data
 
     def get_generation_context(self, entity: str, start_date: str = "2020") -> dict[str, Any]:
-        """Get electricity generation data for a country or US state.
+        """Get electricity generation data for a US entity.
 
-        For international entities, queries /international/data.
-        For US states, queries /electricity/electric-power-operational-data/data.
+        EIA's electricity endpoints cover US national and state-level data.
+        For non-US entities, returns empty generation (Ember covers international).
 
         Args:
-            entity: Country name (e.g. "Germany") or US state name
+            entity: "United States", a US state name, or "US"
             start_date: Year to start from (default "2020")
 
         Returns:
             Dict with keys: entity, generation (list of records), source ("eia")
         """
-        country_code = COUNTRY_CODES.get(entity)
-        if country_code:
-            return self._fetch_international(entity, country_code, start_date)
-        # Try as US state
-        return self._fetch_us_state(entity, start_date)
+        # Map common names to EIA location codes
+        us_names = {"United States", "US", "USA"}
+        if entity in us_names:
+            return self._fetch_us_generation(entity, "US", start_date)
 
-    def _fetch_international(self, entity: str, country_code: str, start_date: str) -> dict[str, Any]:
-        """Fetch international electricity generation by fuel type."""
-        # EIA v2 uses bracket notation for facets/data in query params
+        # Check if it's a US state (not in COUNTRY_CODES or is "United States")
+        if entity not in COUNTRY_CODES or entity == "United States":
+            return self._fetch_us_generation(entity, entity, start_date)
+
+        # Non-US country — EIA electricity data is US-only, skip
+        logger.debug(f"EIA: skipping non-US entity '{entity}' (Ember covers international)")
+        return {"entity": entity, "generation": [], "source": "eia"}
+
+    def _fetch_us_generation(self, entity: str, location: str, start_date: str) -> dict[str, Any]:
+        """Fetch US electricity generation by fuel type (national or state)."""
         params = {
-            "facets[countryRegionId][]": country_code,
-            "facets[activityId][]": "1",  # 1 = generation
-            "frequency": "annual",
-            "start": start_date,
-            "sort[0][column]": "period",
-            "sort[0][direction]": "desc",
-            "length": "5000",
-        }
-        raw = self.fetch("international/data", **params)
-        records = raw.get("response", {}).get("data", [])
-
-        generation = []
-        for r in records:
-            product_id = str(r.get("productId", ""))
-            generation.append({
-                "period": r.get("period"),
-                "fuel_type": PRODUCT_IDS.get(product_id, r.get("productName", product_id)),
-                "value": r.get("value"),
-                "unit": r.get("unit"),
-            })
-
-        return {
-            "entity": entity,
-            "generation": generation,
-            "source": "eia",
-        }
-
-    def _fetch_us_state(self, state: str, start_date: str) -> dict[str, Any]:
-        """Fetch US state electricity generation by fuel type."""
-        params = {
-            "facets[statedescription][]": state,
-            "facets[sectorid][]": "99",  # All sectors
             "data[]": "generation",
             "frequency": "annual",
             "start": start_date,
+            "facets[sectorid][]": "99",  # All sectors
             "sort[0][column]": "period",
             "sort[0][direction]": "desc",
             "length": "5000",
         }
+        # "US" = national, otherwise filter by state name
+        if location == "US":
+            params["facets[location][]"] = "US"
+        else:
+            params["facets[statedescription][]"] = location
+
         raw = self.fetch("electricity/electric-power-operational-data/data", **params)
         records = raw.get("response", {}).get("data", [])
 
@@ -187,13 +168,13 @@ class EIASource(BaseSource):
             generation.append({
                 "period": r.get("period"),
                 "fuel_type": r.get("fueltypeid", ""),
-                "fuel_description": r.get("fueltypedescription", ""),
+                "fuel_description": r.get("fuelTypeDescription", ""),
                 "value": r.get("generation"),
                 "unit": "thousand MWh",
             })
 
         return {
-            "entity": state,
+            "entity": entity,
             "generation": generation,
             "source": "eia",
         }

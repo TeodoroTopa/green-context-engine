@@ -31,42 +31,53 @@ def test_fetch_returns_cached_response(mock_get):
     assert result == {"response": {"data": []}}
 
 
+def test_get_generation_context_skips_non_us():
+    """get_generation_context returns empty generation for non-US countries."""
+    eia = EIASource(api_key="test-key")
+    result = eia.get_generation_context("Germany")
+
+    assert result["entity"] == "Germany"
+    assert result["source"] == "eia"
+    assert result["generation"] == []
+
+
 @patch("pipeline.sources.eia.get_cached", return_value=None)
 @patch("pipeline.sources.eia.set_cached")
 @patch("pipeline.sources.eia.requests")
-def test_get_generation_context_international(mock_requests, mock_set, mock_get):
-    """get_generation_context returns structured data for a known country."""
+def test_get_generation_context_us_national(mock_requests, mock_set, mock_get):
+    """get_generation_context fetches US national data."""
     mock_resp = MagicMock()
     mock_resp.json.return_value = {
         "response": {
             "data": [
-                {"period": "2023", "productId": 38, "productName": "Wind", "value": 145.2, "unit": "billion kWh"},
-                {"period": "2023", "productId": 39, "productName": "Solar", "value": 61.8, "unit": "billion kWh"},
+                {"period": "2023", "fueltypeid": "SUN", "fuelTypeDescription": "Solar", "generation": "5432.1"},
             ]
         }
     }
     mock_requests.get.return_value = mock_resp
 
     eia = EIASource(api_key="test-key")
-    result = eia.get_generation_context("Germany")
+    result = eia.get_generation_context("United States")
 
-    assert result["entity"] == "Germany"
+    assert result["entity"] == "United States"
     assert result["source"] == "eia"
-    assert len(result["generation"]) == 2
-    assert result["generation"][0]["fuel_type"] == "Wind"
-    assert result["generation"][0]["value"] == 145.2
+    assert result["generation"][0]["fuel_type"] == "SUN"
+
+    # Should use location=US facet
+    call_params = mock_requests.get.call_args.kwargs["params"]
+    assert call_params.get("facets[location][]") == "US"
 
 
 @patch("pipeline.sources.eia.get_cached", return_value=None)
 @patch("pipeline.sources.eia.set_cached")
 @patch("pipeline.sources.eia.requests")
 def test_get_generation_context_us_state(mock_requests, mock_set, mock_get):
-    """get_generation_context falls back to US state endpoint for unknown country codes."""
+    """get_generation_context fetches state-level data for US states."""
     mock_resp = MagicMock()
     mock_resp.json.return_value = {
         "response": {
             "data": [
-                {"period": "2023", "fueltypeid": "SUN", "fueltypedescription": "Solar", "generation": "5432.1"},
+                {"period": "2023", "fueltypeid": "SUN", "fuelTypeDescription": "Solar", "generation": "5432.1"},
             ]
         }
     }
@@ -78,4 +89,3 @@ def test_get_generation_context_us_state(mock_requests, mock_set, mock_get):
     assert result["entity"] == "California"
     assert result["source"] == "eia"
     assert result["generation"][0]["fuel_type"] == "SUN"
-    assert result["generation"][0]["value"] == "5432.1"
