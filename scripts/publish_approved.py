@@ -76,8 +76,8 @@ def main():
         icon = "+" if r["status"] == "published" else "x"
         extra = f" ({r.get('content_length', 0)} chars)" if r.get("content_length") else ""
         print(f"  {icon} {r['title']} -- {r['status']}{extra}")
-        if r.get("pr_url"):
-            print(f"    PR: {r['pr_url']}")
+        if r.get("url"):
+            print(f"    Live: {r['url']}")
     print()
 
 

@@ -16,7 +16,7 @@ def test_slugify():
 @patch("pipeline.publishing.approval.publish_to_website")
 def test_process_approved_reads_from_notion(mock_publish):
     """process_approved reads content from Notion and publishes."""
-    mock_publish.return_value = {"success": True, "pr_url": "https://github.com/pr/1", "error": None}
+    mock_publish.return_value = {"success": True, "url": "https://teodorotopa.com/energy/test", "error": None}
 
     notion = MagicMock()
     notion.get_pages_by_status.return_value = [
@@ -29,7 +29,7 @@ def test_process_approved_reads_from_notion(mock_publish):
 
     assert len(results) == 1
     assert results[0]["status"] == "published"
-    assert results[0]["pr_url"] == "https://github.com/pr/1"
+    assert results[0]["url"] == "https://teodorotopa.com/energy/test"
     notion.get_page_as_markdown.assert_called_once_with("page-1")
     notion.update_status.assert_called_once_with("page-1", "Published")
 
@@ -37,7 +37,7 @@ def test_process_approved_reads_from_notion(mock_publish):
 @patch("pipeline.publishing.approval.publish_to_website")
 def test_process_approved_skips_publish_on_failure(mock_publish):
     """process_approved does not update Notion if publish fails."""
-    mock_publish.return_value = {"success": False, "pr_url": None, "error": "API error"}
+    mock_publish.return_value = {"success": False, "url": None, "error": "API error"}
 
     notion = MagicMock()
     notion.get_pages_by_status.return_value = [

@@ -33,9 +33,10 @@ def _get_github_token() -> str | None:
 
 
 def publish_to_website(title: str, markdown: str, date_str: str = "") -> dict:
-    """Publish a markdown post to the website repo via GitHub PR.
+    """Publish a markdown post directly to main on the website repo.
 
-    Creates a new branch, commits the markdown file, and opens a PR.
+    Commits the file to content/energy/ on main, which triggers
+    an automatic Vercel rebuild. Post goes live within ~60 seconds.
 
     Args:
         title: The post title.
@@ -43,48 +44,26 @@ def publish_to_website(title: str, markdown: str, date_str: str = "") -> dict:
         date_str: Date string for the filename (YYYY-MM-DD). Defaults to today.
 
     Returns:
-        Dict with keys: success (bool), pr_url (str or None), error (str or None).
+        Dict with keys: success (bool), url (str or None), error (str or None).
     """
     token = _get_github_token()
     if not token:
         logger.warning("WEBSITE_GITHUB_TOKEN not set — skipping website publish")
-        return {"success": False, "pr_url": None, "error": "No GitHub token configured"}
+        return {"success": False, "url": None, "error": "No GitHub token configured"}
 
     headers = {
         "Authorization": f"Bearer {token}",
         "Accept": "application/vnd.github+json",
     }
 
-    # Build filename
     if not date_str:
         from datetime import date
         date_str = date.today().isoformat()
     slug = _slugify(title)
     filename = f"{date_str}_{slug}.md"
     file_path = f"{WEBSITE_CONTENT_PATH}/{filename}"
-    branch_name = f"energy/{date_str}_{slug}"
 
     try:
-        # 1. Get the SHA of main branch
-        resp = requests.get(
-            f"{GITHUB_API}/repos/{WEBSITE_REPO}/git/ref/heads/main",
-            headers=headers,
-            timeout=15,
-        )
-        resp.raise_for_status()
-        main_sha = resp.json()["object"]["sha"]
-
-        # 2. Create a new branch
-        resp = requests.post(
-            f"{GITHUB_API}/repos/{WEBSITE_REPO}/git/refs",
-            headers=headers,
-            json={"ref": f"refs/heads/{branch_name}", "sha": main_sha},
-            timeout=15,
-        )
-        resp.raise_for_status()
-        logger.info(f"Created branch: {branch_name}")
-
-        # 3. Commit the file to the new branch
         content_b64 = base64.b64encode(markdown.encode("utf-8")).decode("ascii")
         resp = requests.put(
             f"{GITHUB_API}/repos/{WEBSITE_REPO}/contents/{file_path}",
@@ -92,39 +71,19 @@ def publish_to_website(title: str, markdown: str, date_str: str = "") -> dict:
             json={
                 "message": f"Publish: {title}",
                 "content": content_b64,
-                "branch": branch_name,
+                "branch": "main",
             },
             timeout=15,
         )
         resp.raise_for_status()
-        logger.info(f"Committed {filename} to {branch_name}")
+        post_url = f"https://teodorotopa.com/energy/{date_str}_{slug}"
+        logger.info(f"Published to website: {post_url}")
 
-        # 4. Open a PR
-        resp = requests.post(
-            f"{GITHUB_API}/repos/{WEBSITE_REPO}/pulls",
-            headers=headers,
-            json={
-                "title": f"Publish: {title}",
-                "head": branch_name,
-                "base": "main",
-                "body": (
-                    f"Auto-generated energy intelligence brief.\n\n"
-                    f"**File:** `{file_path}`\n\n"
-                    f"Merging will trigger a Vercel rebuild and the post "
-                    f"will be live at teodorotopa.com/energy/{date_str}_{slug}"
-                ),
-            },
-            timeout=15,
-        )
-        resp.raise_for_status()
-        pr_url = resp.json().get("html_url", "")
-        logger.info(f"Opened PR: {pr_url}")
-
-        return {"success": True, "pr_url": pr_url, "error": None}
+        return {"success": True, "url": post_url, "error": None}
 
     except requests.RequestException as e:
         logger.error(f"Failed to publish to website: {e}")
-        return {"success": False, "pr_url": None, "error": str(e)}
+        return {"success": False, "url": None, "error": str(e)}
 
 
 def process_approved(notion: NotionPublisher) -> list[dict]:
@@ -158,7 +117,7 @@ def process_approved(notion: NotionPublisher) -> list[dict]:
 
         # Publish to website
         pub_result = publish_to_website(title, markdown)
-        result["pr_url"] = pub_result.get("pr_url")
+        result["url"] = pub_result.get("url")
 
         if pub_result["success"]:
             notion.update_status(page_id, "Published")
