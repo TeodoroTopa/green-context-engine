@@ -32,21 +32,29 @@ class Pipeline:
 
     def __init__(self):
         load_dotenv()
-        self.ember = EmberSource(api_key=os.getenv("EMBER_API_KEY"))
+
+        # Claude client (dev mode uses CLI proxy)
         if os.getenv("PIPELINE_MODE") == "dev":
             logger.info("Dev mode: routing Claude calls through claude CLI")
             self.client = ClaudeCodeClient()
         else:
             self.client = Anthropic()
-        # Extra data sources — EIA is optional (needs EIA_API_KEY)
-        extra_sources = []
+
+        # Build source registry — each source keyed by its catalog name
+        sources = {}
+        ember_key = os.getenv("EMBER_API_KEY")
+        if ember_key:
+            sources["ember"] = EmberSource(api_key=ember_key)
+            logger.info("Ember source enabled")
         eia_key = os.getenv("EIA_API_KEY")
         if eia_key:
-            extra_sources.append(EIASource(api_key=eia_key))
+            sources["eia"] = EIASource(api_key=eia_key)
             logger.info("EIA source enabled")
-        self.enricher = Enricher(self.ember, self.client, extra_sources=extra_sources)
+
+        self.enricher = Enricher(sources, self.client)
         self.drafter = Drafter(self.client)
-        # Notion is optional — skip if no token configured
+
+        # Notion is optional
         try:
             self.notion = NotionPublisher()
         except ValueError:
@@ -73,7 +81,7 @@ class Pipeline:
 
         stories = stories[:max_stories]
         drafts = []
-        run_tracker = UsageTracker()  # accumulates across all stories
+        run_tracker = UsageTracker()
         for story in stories:
             notion_page_id = None
             try:
@@ -83,15 +91,15 @@ class Pipeline:
                         story.title, source_url=story.url, source_name=story.source,
                     )
 
-                # Enrich
+                # Enrich (strategist + data fetch + analysis)
                 if self.notion and notion_page_id:
                     self.notion.update_status(notion_page_id, "Enriching")
                 tracker = UsageTracker()
                 enriched = self.enricher.enrich(story, tracker)
                 if not enriched.ember_data:
-                    logger.warning(f"Skipping '{story.title}' — no Ember data available")
+                    logger.warning(f"Skipping '{story.title}' — no data available")
                     if self.notion and notion_page_id:
-                        self.notion.update_status(notion_page_id, "Queued")  # reset back
+                        self.notion.update_status(notion_page_id, "Queued")
                     continue
 
                 # Draft
@@ -112,7 +120,6 @@ class Pipeline:
                     self.notion.update_status(notion_page_id, status)
                     self.notion.append_content(notion_page_id, draft_path)
 
-                # merge per-story calls into run total
                 run_tracker.calls.extend(tracker.calls)
             except Exception as e:
                 logger.error(f"Failed to process '{story.title}': {e}")

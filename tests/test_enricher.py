@@ -1,11 +1,11 @@
-"""Tests for the enricher — story analysis via Claude + Ember data."""
+"""Tests for the enricher with data strategist integration."""
 
 from unittest.mock import MagicMock
 
 from pipeline.analysis.enricher import Enricher, EnrichedStory
 from pipeline.monitors.rss_monitor import Story
 
-STORY_WITH_COUNTRY = Story(
+STORY = Story(
     title="Solar capacity surges in Germany",
     url="https://example.com/solar-germany",
     summary="Germany added 10 GW of solar in 2025, a record year.",
@@ -14,33 +14,23 @@ STORY_WITH_COUNTRY = Story(
     feed_name="mongabay_energy",
 )
 
-STORY_NO_COUNTRY = Story(
-    title="New battery chemistry could halve costs",
-    url="https://example.com/battery",
-    summary="Researchers develop sodium-ion cells with higher energy density.",
-    published="2026-03-30",
-    source="mongabay",
-    feed_name="mongabay_energy",
-)
 
-
-def _mock_claude_response(text: str) -> MagicMock:
+def _mock_response(text: str) -> MagicMock:
     msg = MagicMock()
     msg.content = [MagicMock(text=text)]
     return msg
 
 
-def test_enrich_uses_local_extraction_when_country_found():
-    """When a country is in the text, Claude is only called for analysis + ripple + tradeoffs + landscape."""
+def test_enrich_uses_strategist_and_fetches_data():
+    """Enricher calls strategist, fetches from sources, and analyzes."""
     client = MagicMock()
     ember = MagicMock()
 
-    # 4 Claude calls: analysis, ripple_effects, tradeoffs, landscape (entity extraction is local)
+    # Call 1: strategist returns fetch plan
+    # Call 2: analysis returns summary + angles
     client.messages.create.side_effect = [
-        _mock_claude_response('{"summary": "Germany solar is growing fast.", "angles": ["record capacity"]}'),
-        _mock_claude_response('{"ripple_effects": ["Grid stability improves"]}'),
-        _mock_claude_response('{"tradeoffs": [{"tension": "land use", "gained": "clean energy", "lost": "farmland"}]}'),
-        _mock_claude_response('{"key_players": ["E.ON"], "implementation_state": "Mature", "recent_developments": [], "policy_context": "EEG framework"}'),
+        _mock_response('{"fetches": [{"source": "ember", "entity": "Germany", "role": "primary"}, {"source": "ember", "entity": "World", "role": "benchmark"}], "reasoning": "Compare to global"}'),
+        _mock_response('{"summary": "Germany solar growing fast.", "angles": ["Record capacity"]}'),
     ]
     ember.get_generation_context.return_value = {
         "entity": "Germany",
@@ -48,39 +38,37 @@ def test_enrich_uses_local_extraction_when_country_found():
         "carbon_intensity": [{"emissions_intensity_gco2_per_kwh": 350, "date": "2025"}],
     }
 
-    enricher = Enricher(ember, client)
-    result = enricher.enrich(STORY_WITH_COUNTRY)
+    sources = {"ember": ember}
+    enricher = Enricher(sources, client)
+    result = enricher.enrich(STORY)
 
     assert result.entities == ["Germany"]
     assert "Germany" in result.ember_data
-    assert len(result.ripple_effects) == 1
-    assert len(result.tradeoffs) == 1
-    assert result.landscape["key_players"] == ["E.ON"]
-    # 4 Claude calls (analysis + ripple + tradeoffs + landscape), not 5 (entity extraction skipped)
-    assert client.messages.create.call_count == 4
+    assert "World" in result.benchmark_data
+    assert result.fetch_plan["reasoning"] == "Compare to global"
+    # 2 Claude calls: strategist + analysis
+    assert client.messages.create.call_count == 2
 
 
-def test_enrich_falls_back_to_claude_when_no_country():
-    """When no country found locally, falls back to Claude for entity extraction."""
+def test_enrich_falls_back_on_strategist_failure():
+    """Enricher uses default plan when strategist returns bad JSON."""
     client = MagicMock()
     ember = MagicMock()
 
-    # 5 Claude calls: entity extraction + analysis + ripple + tradeoffs + landscape
     client.messages.create.side_effect = [
-        _mock_claude_response('["World"]'),
-        _mock_claude_response('{"summary": "Battery tech advancing.", "angles": ["cost reduction"]}'),
-        _mock_claude_response('{"ripple_effects": ["Supply chain shift"]}'),
-        _mock_claude_response('{"tradeoffs": [{"tension": "cost vs performance", "gained": "cheaper", "lost": "energy density"}]}'),
-        _mock_claude_response('{"key_players": [], "implementation_state": "R&D phase", "recent_developments": [], "policy_context": ""}'),
+        _mock_response("not valid json"),  # strategist fails
+        _mock_response('{"summary": "World data.", "angles": ["Global trends"]}'),
     ]
     ember.get_generation_context.return_value = {
         "entity": "World",
-        "generation": [],
-        "carbon_intensity": [],
+        "generation": [{"series": "Total", "generation_twh": 29000, "date": "2024"}],
+        "carbon_intensity": [{"emissions_intensity_gco2_per_kwh": 471, "date": "2024"}],
     }
 
-    enricher = Enricher(ember, client)
-    result = enricher.enrich(STORY_NO_COUNTRY)
+    sources = {"ember": ember}
+    enricher = Enricher(sources, client)
+    result = enricher.enrich(STORY)
 
-    assert result.entities == ["World"]
-    assert client.messages.create.call_count == 5
+    # Falls back to World
+    assert "World" in result.ember_data
+    assert "Fallback" in result.fetch_plan["reasoning"]
