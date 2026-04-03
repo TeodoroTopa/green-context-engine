@@ -164,6 +164,50 @@ class NotionPublisher:
             logger.error(f"Failed to push to Notion: {e}")
             return None
 
+    def get_pages_by_status(self, status: str) -> list[dict]:
+        """Query the database for pages with a given status.
+
+        Args:
+            status: Status value to filter by (e.g. "Approved", "Drafted").
+
+        Returns:
+            List of page dicts with keys: id, title, url, source.
+        """
+        payload = {
+            "filter": {
+                "property": "Status",
+                "select": {"equals": status},
+            }
+        }
+        try:
+            resp = requests.post(
+                f"{NOTION_API}/databases/{self.database_id}/query",
+                headers=self.headers,
+                json=payload,
+                timeout=15,
+            )
+            resp.raise_for_status()
+            results = resp.json().get("results", [])
+
+            pages = []
+            for page in results:
+                props = page.get("properties", {})
+                title_arr = props.get("Story Title", {}).get("title", [])
+                title = title_arr[0]["text"]["content"] if title_arr else ""
+                url = props.get("userDefined:URL", {}).get("url", "")
+                source = props.get("Source", {}).get("select", {})
+                pages.append({
+                    "id": page["id"],
+                    "title": title,
+                    "url": url,
+                    "source": source.get("name", "") if source else "",
+                })
+            logger.info(f"Found {len(pages)} pages with status '{status}'")
+            return pages
+        except requests.RequestException as e:
+            logger.error(f"Failed to query Notion database: {e}")
+            return []
+
     def append_content(self, page_id: str, draft_path: Path) -> bool:
         """Append the draft body as content blocks to an existing Notion page.
 
