@@ -49,6 +49,72 @@ class NotionPublisher:
                 return db_id
         raise ValueError("No database_id found in config/publishing.yaml or constructor")
 
+    def create_story(self, title: str, source_url: str = "", source_name: str = "", topics: list[str] | None = None) -> str | None:
+        """Create a Notion page for a newly discovered story (status: Queued).
+
+        Returns:
+            The Notion page ID if successful, None otherwise.
+        """
+        properties = {
+            "Story Title": {"title": [{"text": {"content": title}}]},
+            "Status": {"select": {"name": "Queued"}},
+        }
+        if source_name:
+            properties["Source"] = {"select": {"name": source_name}}
+        if source_url:
+            properties["userDefined:URL"] = {"url": source_url}
+        if topics:
+            properties["Topics"] = {"multi_select": [{"name": t} for t in topics]}
+
+        payload = {
+            "parent": {"database_id": self.database_id},
+            "properties": properties,
+        }
+
+        try:
+            resp = requests.post(
+                f"{NOTION_API}/pages",
+                headers=self.headers,
+                json=payload,
+                timeout=15,
+            )
+            resp.raise_for_status()
+            page_id = resp.json()["id"]
+            logger.info(f"Queued in Notion: {title} (page {page_id})")
+            return page_id
+        except requests.RequestException as e:
+            logger.error(f"Failed to create Notion page: {e}")
+            return None
+
+    def update_status(self, page_id: str, status: str) -> bool:
+        """Update the status of an existing Notion page.
+
+        Args:
+            page_id: The Notion page ID.
+            status: New status value (Queued, Enriching, Drafted, Review, Approved, Published).
+
+        Returns:
+            True if successful.
+        """
+        payload = {
+            "properties": {
+                "Status": {"select": {"name": status}},
+            }
+        }
+        try:
+            resp = requests.patch(
+                f"{NOTION_API}/pages/{page_id}",
+                headers=self.headers,
+                json=payload,
+                timeout=15,
+            )
+            resp.raise_for_status()
+            logger.debug(f"Updated Notion page {page_id} → {status}")
+            return True
+        except requests.RequestException as e:
+            logger.error(f"Failed to update Notion status: {e}")
+            return False
+
     def push_draft(self, draft_path: Path, source_url: str = "", source_name: str = "", topics: list[str] | None = None) -> str | None:
         """Create a page in the editorial queue for a draft.
 

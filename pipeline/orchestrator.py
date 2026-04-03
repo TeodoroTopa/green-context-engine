@@ -62,23 +62,31 @@ class Pipeline:
         drafts = []
         run_tracker = UsageTracker()  # accumulates across all stories
         for story in stories:
+            notion_page_id = None
             try:
+                # Queue in Notion
+                if self.notion:
+                    notion_page_id = self.notion.create_story(
+                        story.title, source_url=story.url, source_name=story.source,
+                    )
+
+                # Enrich
+                if self.notion and notion_page_id:
+                    self.notion.update_status(notion_page_id, "Enriching")
                 tracker = UsageTracker()
                 enriched = self.enricher.enrich(story, tracker)
                 if not enriched.ember_data:
                     logger.warning(f"Skipping '{story.title}' — no Ember data available")
                     continue
+
+                # Draft
                 draft_path = self.drafter.draft(enriched, tracker)
                 drafts.append(draft_path)
                 logger.info(f"Drafted: {draft_path.name}")
                 logger.info(f"  {tracker.summary()}")
-                if self.notion:
-                    self.notion.push_draft(
-                        draft_path,
-                        source_url=story.url,
-                        source_name=story.source,
-                        topics=enriched.entities,
-                    )
+                if self.notion and notion_page_id:
+                    self.notion.update_status(notion_page_id, "Drafted")
+
                 # merge per-story calls into run total
                 run_tracker.calls.extend(tracker.calls)
             except Exception as e:
