@@ -17,7 +17,9 @@ from dotenv import load_dotenv
 from pipeline.analysis.enricher import Enricher
 from pipeline.generation.drafter import Drafter
 from pipeline.monitors.rss_monitor import RSSMonitor
+from pipeline.publishing.notion import NotionPublisher
 from pipeline.sources.ember import EmberSource
+from pipeline.usage import UsageTracker
 
 logger = logging.getLogger(__name__)
 
@@ -31,6 +33,12 @@ class Pipeline:
         self.client = Anthropic()
         self.enricher = Enricher(self.ember, self.client)
         self.drafter = Drafter(self.client)
+        # Notion is optional — skip if no token configured
+        try:
+            self.notion = NotionPublisher()
+        except ValueError:
+            self.notion = None
+            logger.info("Notion token not configured — drafts will be saved locally only")
 
     def run(self, source: str | None = None, max_stories: int = 5) -> list[Path]:
         """Run the full pipeline.
@@ -52,15 +60,33 @@ class Pipeline:
 
         stories = stories[:max_stories]
         drafts = []
+        run_tracker = UsageTracker()  # accumulates across all stories
         for story in stories:
             try:
-                enriched = self.enricher.enrich(story)
-                draft_path = self.drafter.draft(enriched)
+                tracker = UsageTracker()
+                enriched = self.enricher.enrich(story, tracker)
+                if not enriched.ember_data:
+                    logger.warning(f"Skipping '{story.title}' — no Ember data available")
+                    continue
+                draft_path = self.drafter.draft(enriched, tracker)
                 drafts.append(draft_path)
                 logger.info(f"Drafted: {draft_path.name}")
+                logger.info(f"  {tracker.summary()}")
+                if self.notion:
+                    self.notion.push_draft(
+                        draft_path,
+                        source_url=story.url,
+                        source_name=story.source,
+                        topics=enriched.entities,
+                    )
+                # merge per-story calls into run total
+                run_tracker.calls.extend(tracker.calls)
             except Exception as e:
                 logger.error(f"Failed to process '{story.title}': {e}")
                 continue
+
+        if run_tracker.calls:
+            logger.info(f"=== Run total ===\n{run_tracker.summary()}")
         return drafts
 
     def _load_feeds(self, source: str | None = None) -> tuple[list[dict], list[str]]:

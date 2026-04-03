@@ -14,10 +14,18 @@ from anthropic import Anthropic
 
 from pipeline.monitors.rss_monitor import Story
 from pipeline.sources.ember import EmberSource
+from pipeline.usage import UsageTracker
 
 logger = logging.getLogger(__name__)
 
 COUNTRIES_FILE = Path("data/reference/countries.json")
+
+
+def _strip_code_fences(text: str) -> str:
+    """Remove markdown code fences (```json ... ```) that Claude sometimes wraps around JSON."""
+    stripped = re.sub(r"^```(?:json)?\s*\n?", "", text.strip())
+    stripped = re.sub(r"\n?```\s*$", "", stripped)
+    return stripped.strip()
 
 
 @dataclass
@@ -34,7 +42,7 @@ class EnrichedStory:
 class Enricher:
     """Enriches stories with energy data and Claude-powered analysis."""
 
-    def __init__(self, ember: EmberSource, client: Anthropic, model: str = "claude-sonnet-4-6-20250514"):
+    def __init__(self, ember: EmberSource, client: Anthropic, model: str = "claude-sonnet-4-6"):
         self.ember = ember
         self.client = client
         self.model = model
@@ -47,14 +55,21 @@ class Enricher:
         logger.warning(f"Countries file not found: {COUNTRIES_FILE}")
         return {}
 
-    def enrich(self, story: Story) -> EnrichedStory:
+    def enrich(self, story: Story, tracker: UsageTracker | None = None) -> EnrichedStory:
         """Full enrichment pipeline for a single story."""
         entities = self._extract_entities_local(story)
         if not entities:
             logger.info("No local entity match, falling back to Claude")
-            entities = self._extract_entities_claude(story)
+            entities = self._extract_entities_claude(story, tracker)
         ember_data = self._fetch_data(entities)
-        data_summary, angles = self._analyze(story, ember_data)
+
+        # Only call Claude for analysis if we have actual data to analyze
+        if ember_data:
+            data_summary, angles = self._analyze(story, ember_data, tracker)
+        else:
+            data_summary = ""
+            angles = []
+
         return EnrichedStory(
             story=story,
             entities=entities,
@@ -74,7 +89,7 @@ class Enricher:
                     found.append(canonical)
         return found
 
-    def _extract_entities_claude(self, story: Story) -> list[str]:
+    def _extract_entities_claude(self, story: Story, tracker: UsageTracker | None = None) -> list[str]:
         """Fallback: use Claude to extract country/region names from a story."""
         response = self.client.messages.create(
             model=self.model,
@@ -90,7 +105,9 @@ class Enricher:
                 ),
             }],
         )
-        text = response.content[0].text.strip()
+        if tracker:
+            tracker.track(response, "entity_extraction")
+        text = _strip_code_fences(response.content[0].text)
         try:
             entities = json.loads(text)
             if isinstance(entities, list):
@@ -109,7 +126,7 @@ class Enricher:
                 logger.warning(f"Failed to fetch Ember data for '{entity}': {e}")
         return data
 
-    def _analyze(self, story: Story, data: dict) -> tuple[str, list[str]]:
+    def _analyze(self, story: Story, data: dict, tracker: UsageTracker | None = None) -> tuple[str, list[str]]:
         """Claude analyzes the story in context of the energy data."""
         data_text = self._format_data(data)
         response = self.client.messages.create(
@@ -128,7 +145,9 @@ class Enricher:
                 ),
             }],
         )
-        text = response.content[0].text.strip()
+        if tracker:
+            tracker.track(response, "analysis")
+        text = _strip_code_fences(response.content[0].text)
         try:
             result = json.loads(text)
             return result.get("summary", ""), result.get("angles", [])

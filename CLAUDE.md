@@ -54,6 +54,7 @@ Python 3.11+, Claude API (Anthropic SDK), requests, pandas, feedparser, pytest, 
 - **Human in the loop** — pipeline drafts, Teo approves, nothing auto-publishes
 - **Fail gracefully** — log and skip on errors, don't crash the pipeline
 - **Version the prompts** — templates in `generation/prompts/` evolve over time
+- **Update relevance keywords when adding data sources** — `config/feeds.yaml` keyword list must reflect what we can actually contextualize with data. New source = new keywords.
 
 ## Commands
 
@@ -67,18 +68,19 @@ pytest tests/
 
 ## MCP & Skills
 
-- **Notion MCP** — editorial queue tracking (use connector directly, not custom API code)
+- **Notion** — editorial queue tracking via direct API (`pipeline/publishing/notion.py`), also available via MCP in Claude Code
 - **`/schedule`** — daily pipeline automation
 - **`/skill-creator`** — custom editorial review skill (stored in `.claude/skills/`)
 
 ## Current Status
 
-**Phase 1 complete. Alignment fixes done.**
+**Phase 1 complete. First live run done. Hardening data integrity.**
 
-Done: Ember connector, cache, RSS monitor (keyword filter), enricher (local entity extraction + Claude fallback), drafter, orchestrator, CLI. Notion editorial queue. Editorial review skill. 14 tests.
+Done: Ember connector, cache, RSS monitor (keyword filter), enricher (local NER + Claude fallback), drafter, orchestrator, CLI, token usage tracking ($cost per draft), Notion API publisher (`pipeline/publishing/notion.py`), editorial review skill. 14 tests.
 Run: `python scripts/run_pipeline.py --source mongabay` | Review: invoke `/energy-editorial-review` on a draft file.
-Notion: "Energy Editorial Queue" database with board view (MCP in Claude Code sessions).
-Next: test with real API keys, then Phase 2 data sources (EIA, Carbon Brief).
+Env vars needed: `ANTHROPIC_API_KEY`, `EMBER_API_KEY` (free — sign up at ember-energy.org/data/api), `NOTION_TOKEN` (optional — notion.so/my-integrations).
+Key rule: pipeline skips stories with no Ember data. Drafts must never contain stats not from the provided data or source article.
+Next: get Ember API key (currently 403), then Phase 2 data sources (EIA, Carbon Brief).
 
 ## Notes for Claude Code
 

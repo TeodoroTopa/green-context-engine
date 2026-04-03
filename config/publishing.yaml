@@ -6,9 +6,5 @@ notion:
   data_source_id: "89c62ab7-31d3-42ab-b832-d04b433346a6"
   # Status values: Queued, Enriching, Drafted, Review, Approved, Published
 
-# When the pipeline runs as a Python script, it can't use MCP directly.
-# Notion updates happen in two ways:
-# 1. When running via /schedule (Claude agent can use MCP)
-# 2. Manually via review_drafts.py or Claude Code conversation
-#
-# The pipeline writes drafts locally; Notion syncing is layered on top.
+# Pipeline pushes drafts to Notion automatically when NOTION_TOKEN is set.
+# Without the token, drafts are saved locally only.
