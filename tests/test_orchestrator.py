@@ -37,7 +37,7 @@ def test_pipeline_runs_end_to_end(mock_dotenv, mock_yaml, mock_monitor_cls, mock
     }
     mock_ember_cls.return_value = mock_ember
 
-    # Mock Claude responses: entity extraction, analysis, draft generation
+    # Mock Claude responses: entity extraction, analysis, ripple, tradeoffs, draft
     mock_client = MagicMock()
     def make_response(text):
         msg = MagicMock()
@@ -47,6 +47,8 @@ def test_pipeline_runs_end_to_end(mock_dotenv, mock_yaml, mock_monitor_cls, mock
     mock_client.messages.create.side_effect = [
         make_response('["World"]'),
         make_response('{"summary": "Solar is growing.", "angles": ["Growth trend"]}'),
+        make_response('{"ripple_effects": ["Grid costs drop"]}'),
+        make_response('{"tradeoffs": [{"tension": "cost", "gained": "cheaper power", "lost": "jobs"}]}'),
         make_response("---\ntitle: Test\nstatus: draft\n---\n\n## The Hook\n\nTest content."),
     ]
     mock_anthropic_cls.return_value = mock_client

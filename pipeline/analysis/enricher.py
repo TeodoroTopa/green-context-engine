@@ -15,17 +15,14 @@ from anthropic import Anthropic
 from pipeline.monitors.rss_monitor import Story
 from pipeline.sources.ember import EmberSource
 from pipeline.usage import UsageTracker
+from pipeline.analysis.ripple import analyze_ripple_effects
+from pipeline.analysis.tradeoffs import analyze_tradeoffs
+
+from pipeline.analysis.utils import strip_code_fences
 
 logger = logging.getLogger(__name__)
 
 COUNTRIES_FILE = Path("data/reference/countries.json")
-
-
-def _strip_code_fences(text: str) -> str:
-    """Remove markdown code fences (```json ... ```) that Claude sometimes wraps around JSON."""
-    stripped = re.sub(r"^```(?:json)?\s*\n?", "", text.strip())
-    stripped = re.sub(r"\n?```\s*$", "", stripped)
-    return stripped.strip()
 
 
 @dataclass
@@ -37,6 +34,8 @@ class EnrichedStory:
     ember_data: dict
     data_summary: str
     suggested_angles: list[str] = field(default_factory=list)
+    ripple_effects: list[str] = field(default_factory=list)
+    tradeoffs: list[dict] = field(default_factory=list)
 
 
 class Enricher:
@@ -65,10 +64,21 @@ class Enricher:
 
         # Only call Claude for analysis if we have actual data to analyze
         if ember_data:
+            data_text = self._format_data(ember_data)
             data_summary, angles = self._analyze(story, ember_data, tracker)
+            ripple = analyze_ripple_effects(
+                self.client, self.model,
+                story.title, story.summary, data_text, tracker,
+            )
+            tradeoff_list = analyze_tradeoffs(
+                self.client, self.model,
+                story.title, story.summary, data_text, tracker,
+            )
         else:
             data_summary = ""
             angles = []
+            ripple = []
+            tradeoff_list = []
 
         return EnrichedStory(
             story=story,
@@ -76,6 +86,8 @@ class Enricher:
             ember_data=ember_data,
             data_summary=data_summary,
             suggested_angles=angles,
+            ripple_effects=ripple,
+            tradeoffs=tradeoff_list,
         )
 
     def _extract_entities_local(self, story: Story) -> list[str]:
@@ -107,7 +119,7 @@ class Enricher:
         )
         if tracker:
             tracker.track(response, "entity_extraction")
-        text = _strip_code_fences(response.content[0].text)
+        text = strip_code_fences(response.content[0].text)
         try:
             entities = json.loads(text)
             if isinstance(entities, list):
@@ -147,7 +159,7 @@ class Enricher:
         )
         if tracker:
             tracker.track(response, "analysis")
-        text = _strip_code_fences(response.content[0].text)
+        text = strip_code_fences(response.content[0].text)
         try:
             result = json.loads(text)
             return result.get("summary", ""), result.get("angles", [])

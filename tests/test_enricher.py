@@ -31,14 +31,16 @@ def _mock_claude_response(text: str) -> MagicMock:
 
 
 def test_enrich_uses_local_extraction_when_country_found():
-    """When a country is in the text, Claude is only called for analysis (not entity extraction)."""
+    """When a country is in the text, Claude is only called for analysis + ripple + tradeoffs."""
     client = MagicMock()
     ember = MagicMock()
 
-    # Only 1 Claude call expected: analysis (entity extraction is local)
-    client.messages.create.return_value = _mock_claude_response(
-        '{"summary": "Germany solar is growing fast.", "angles": ["record capacity"]}'
-    )
+    # 3 Claude calls: analysis, ripple_effects, tradeoffs (entity extraction is local)
+    client.messages.create.side_effect = [
+        _mock_claude_response('{"summary": "Germany solar is growing fast.", "angles": ["record capacity"]}'),
+        _mock_claude_response('{"ripple_effects": ["Grid stability improves"]}'),
+        _mock_claude_response('{"tradeoffs": [{"tension": "land use", "gained": "clean energy", "lost": "farmland"}]}'),
+    ]
     ember.get_generation_context.return_value = {
         "entity": "Germany",
         "generation": [{"series": "Solar", "generation_twh": 72, "date": "2025"}],
@@ -50,8 +52,10 @@ def test_enrich_uses_local_extraction_when_country_found():
 
     assert result.entities == ["Germany"]
     assert "Germany" in result.ember_data
-    # Only 1 Claude call (analysis), not 2 (entity extraction skipped)
-    assert client.messages.create.call_count == 1
+    assert len(result.ripple_effects) == 1
+    assert len(result.tradeoffs) == 1
+    # 3 Claude calls (analysis + ripple + tradeoffs), not 4 (entity extraction skipped)
+    assert client.messages.create.call_count == 3
 
 
 def test_enrich_falls_back_to_claude_when_no_country():
@@ -59,10 +63,12 @@ def test_enrich_falls_back_to_claude_when_no_country():
     client = MagicMock()
     ember = MagicMock()
 
-    # 2 Claude calls: entity extraction fallback + analysis
+    # 4 Claude calls: entity extraction + analysis + ripple + tradeoffs
     client.messages.create.side_effect = [
         _mock_claude_response('["World"]'),
         _mock_claude_response('{"summary": "Battery tech advancing.", "angles": ["cost reduction"]}'),
+        _mock_claude_response('{"ripple_effects": ["Supply chain shift"]}'),
+        _mock_claude_response('{"tradeoffs": [{"tension": "cost vs performance", "gained": "cheaper", "lost": "energy density"}]}'),
     ]
     ember.get_generation_context.return_value = {
         "entity": "World",
@@ -74,4 +80,4 @@ def test_enrich_falls_back_to_claude_when_no_country():
     result = enricher.enrich(STORY_NO_COUNTRY)
 
     assert result.entities == ["World"]
-    assert client.messages.create.call_count == 2
+    assert client.messages.create.call_count == 4

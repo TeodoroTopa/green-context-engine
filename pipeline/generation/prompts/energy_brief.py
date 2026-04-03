@@ -22,6 +22,27 @@ Other rules:
 """
 
 
+def _format_ripple_effects(effects: list[str]) -> str:
+    """Format ripple effects for the prompt."""
+    if not effects:
+        return "No pre-analyzed ripple effects available."
+    return "\n".join(f"- {e}" for e in effects)
+
+
+def _format_tradeoffs(tradeoffs: list[dict]) -> str:
+    """Format trade-offs for the prompt."""
+    if not tradeoffs:
+        return "No pre-analyzed trade-offs available."
+    parts = []
+    for t in tradeoffs:
+        parts.append(
+            f"**{t.get('tension', 'Trade-off')}**\n"
+            f"  Gained: {t.get('gained', '?')}\n"
+            f"  Lost: {t.get('lost', '?')}"
+        )
+    return "\n\n".join(parts)
+
+
 def build_draft_prompt(enriched) -> str:
     """Build the user message for draft generation.
 
@@ -29,6 +50,11 @@ def build_draft_prompt(enriched) -> str:
         enriched: An EnrichedStory instance.
     """
     angles_text = "\n".join(f"- {a}" for a in enriched.suggested_angles)
+    ripple_text = _format_ripple_effects(enriched.ripple_effects)
+    tradeoffs_text = _format_tradeoffs(enriched.tradeoffs)
+
+    # Use actual source name, not hardcoded Mongabay
+    source_name = enriched.story.source.capitalize() if enriched.story.source else "Source"
 
     return f"""\
 Write an energy intelligence brief using ONLY the story and data below.
@@ -36,13 +62,22 @@ You must not introduce any numbers or statistics beyond what appears in these se
 
 ## Story
 Title: {enriched.story.title}
-Source: {enriched.story.source} ({enriched.story.url})
+Source: {source_name} ({enriched.story.url})
 Summary: {enriched.story.summary}
 
 ## Data Summary (from Ember API)
 {enriched.data_summary}
 
-REMINDER: Use only the numbers above. If data is limited, write a shorter brief and note the gaps.
+## Pre-Analyzed Ripple Effects
+{ripple_text}
+
+## Pre-Analyzed Trade-Offs
+{tradeoffs_text}
+
+REMINDER: Use only the numbers from the Data Summary and Story above. If data is limited,
+write a shorter brief and note the gaps. The ripple effects and trade-offs above are
+pre-analyzed — incorporate them into the relevant sections, but verify any numbers
+against the Data Summary before using them.
 
 ## Suggested Angles
 {angles_text}
@@ -51,8 +86,8 @@ REMINDER: Use only the numbers above. If data is limited, write a shorter brief 
 Write in markdown. Use this structure (skip sections that don't apply):
 1. **The Hook** — the specific event or data point (REQUIRED)
 2. **The Data Context** — relevant numbers from sources (REQUIRED — only from data above)
-3. **The Ripple Effects** — second/third-order consequences
-4. **The Trade-Offs** — what's gained and lost, with data on both sides
+3. **The Ripple Effects** — second/third-order consequences (use pre-analyzed effects above)
+4. **The Trade-Offs** — what's gained and lost (use pre-analyzed trade-offs above)
 5. **The Take** — editorial perspective earned through the preceding evidence
 
 Start with YAML frontmatter:
@@ -60,7 +95,7 @@ Start with YAML frontmatter:
 title: "..."
 date: {enriched.story.published or "YYYY-MM-DD"}
 sources:
-  - name: Mongabay
+  - name: {source_name}
     url: {enriched.story.url}
   - name: Ember
     url: https://ember-energy.org
