@@ -42,8 +42,8 @@ class Pipeline:
         Returns:
             List of paths to generated draft files.
         """
-        feeds = self._load_feeds(source)
-        monitor = RSSMonitor(feeds)
+        feeds, keywords = self._load_feeds(source)
+        monitor = RSSMonitor(feeds, relevance_keywords=keywords)
         stories = monitor.check_feeds()
         logger.info(f"Found {len(stories)} new stories")
 
@@ -63,11 +63,12 @@ class Pipeline:
                 continue
         return drafts
 
-    def _load_feeds(self, source: str | None = None) -> list[dict]:
-        """Load feed config, optionally filtering by source."""
+    def _load_feeds(self, source: str | None = None) -> tuple[list[dict], list[str]]:
+        """Load feed config, optionally filtering by source. Returns (feeds, keywords)."""
         config_path = Path("config/feeds.yaml")
         feeds_cfg = yaml.safe_load(config_path.read_text(encoding="utf-8"))
         feeds = feeds_cfg.get("feeds", [])
+        keywords = feeds_cfg.get("relevance_keywords", [])
         if source:
             feeds = [f for f in feeds if f["source"] == source]
-        return feeds
+        return feeds, keywords

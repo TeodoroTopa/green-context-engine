@@ -73,11 +73,11 @@ pytest tests/
 
 ## Current Status
 
-**Phase 1 complete.** Full pipeline functional end-to-end.
+**Phase 1 complete + alignment fixes in progress.**
 
-Done: Ember connector, cache, RSS monitor, enricher, drafter, orchestrator, CLI entry point. 12 tests passing.
+Done: Ember connector, cache, RSS monitor (with keyword relevance filter), enricher, drafter, orchestrator, CLI. 13 tests.
 Run with: `python scripts/run_pipeline.py --source mongabay`
-Next: review CLI + Notion integration, then scheduling.
+In progress: local entity extraction, Notion integration, editorial review skill.
 
 ## Notes for Claude Code
 

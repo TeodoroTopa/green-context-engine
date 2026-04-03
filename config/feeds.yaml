@@ -9,3 +9,27 @@ feeds:
   - name: mongabay_climate
     url: "https://news.mongabay.com/feed/?post_type=post&feedtype=bulletpoints&topic=climate-change"
     source: mongabay
+
+# Stories must match at least one keyword in title or summary to proceed.
+# This filters before any Claude API calls, saving cost.
+relevance_keywords:
+  - solar
+  - wind
+  - coal
+  - renewable
+  - grid
+  - carbon
+  - energy
+  - electricity
+  - nuclear
+  - hydropower
+  - battery
+  - decarbonization
+  - emissions
+  - fossil fuel
+  - power plant
+  - turbine
+  - photovoltaic
+  - natural gas
+  - oil production
+  - climate policy

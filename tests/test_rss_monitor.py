@@ -58,3 +58,39 @@ def test_deduplication(mock_parse, tmp_path):
     second = monitor.check_feeds()
     assert len(second) == 0
     assert seen_file.exists()
+
+
+# RSS with one energy story and one unrelated story
+MIXED_RSS = """<?xml version="1.0" encoding="UTF-8"?>
+<rss version="2.0">
+  <channel>
+    <item>
+      <title>Solar capacity surges in Southeast Asia</title>
+      <link>https://example.com/solar</link>
+      <guid>solar-1</guid>
+      <description>Vietnam leads solar expansion.</description>
+    </item>
+    <item>
+      <title>New frog species discovered in Borneo</title>
+      <link>https://example.com/frog</link>
+      <guid>frog-1</guid>
+      <description>Researchers found a tiny amphibian in peat swamp forest.</description>
+    </item>
+  </channel>
+</rss>"""
+
+PARSED_MIXED = feedparser.parse(MIXED_RSS)
+
+
+@patch("pipeline.monitors.rss_monitor.feedparser.parse", return_value=PARSED_MIXED)
+def test_keyword_filter_removes_irrelevant_stories(mock_parse, tmp_path):
+    """Stories without energy keywords are filtered out."""
+    monitor = RSSMonitor(
+        FEED_CFG,
+        seen_file=tmp_path / "seen.json",
+        relevance_keywords=["solar", "wind", "energy"],
+    )
+    stories = monitor.check_feeds()
+
+    assert len(stories) == 1
+    assert stories[0].title == "Solar capacity surges in Southeast Asia"

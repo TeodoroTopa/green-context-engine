@@ -31,10 +31,16 @@ class Story:
 class RSSMonitor:
     """Monitors RSS feeds and returns new stories since last check."""
 
-    def __init__(self, feeds: list[dict], seen_file: Path = SEEN_FILE):
+    def __init__(
+        self,
+        feeds: list[dict],
+        seen_file: Path = SEEN_FILE,
+        relevance_keywords: list[str] | None = None,
+    ):
         self.feeds = feeds
         self.seen_file = seen_file
         self.seen: set[str] = self._load_seen()
+        self.keywords = [k.lower() for k in (relevance_keywords or [])]
 
     def _load_seen(self) -> set[str]:
         if self.seen_file.exists():
@@ -78,6 +84,15 @@ class RSSMonitor:
                 source=feed_cfg["source"],
                 feed_name=feed_cfg["name"],
             )
+            if self.keywords and not self._is_relevant(story):
+                logger.debug(f"Filtered out (no keyword match): {story.title}")
+                self.seen.add(guid)  # still mark seen so we don't re-check
+                continue
             stories.append(story)
             self.seen.add(guid)
         return stories
+
+    def _is_relevant(self, story: Story) -> bool:
+        """Check if story title or summary contains any relevance keyword."""
+        text = f"{story.title} {story.summary}".lower()
+        return any(kw in text for kw in self.keywords)
