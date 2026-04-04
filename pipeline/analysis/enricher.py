@@ -198,8 +198,8 @@ class Enricher:
             lines = [f"### {entity} (primary)"]
             gen = context.get("generation", [])
             if gen:
-                latest_year = max(r["date"] for r in gen)
-                latest = [r for r in gen if r["date"] == latest_year]
+                latest_year = max(r.get("date") or r.get("period", "") for r in gen)
+                latest = [r for r in gen if (r.get("date") or r.get("period", "")) == latest_year]
                 lines.append(f"Generation mix ({latest_year}):")
                 for r in sorted(latest, key=lambda x: x.get("generation_twh", 0), reverse=True):
                     lines.append(f"  {r.get('series', '?')}: {r.get('generation_twh', '?')} TWh")
@@ -311,10 +311,10 @@ class Enricher:
             # Also show generation if available (useful for comparing scale)
             gen = context.get("generation", [])
             if gen:
-                latest_year = max(r["date"] for r in gen)
+                latest_year = max(r.get("date") or r.get("period", "") for r in gen)
                 total = sum(
                     r.get("generation_twh", 0) for r in gen
-                    if r["date"] == latest_year and isinstance(r.get("generation_twh"), (int, float))
+                    if (r.get("date") or r.get("period", "")) == latest_year and isinstance(r.get("generation_twh"), (int, float))
                 )
                 if total > 0:
                     lines.append(f"  {entity} total generation ({latest_year}): {total:.0f} TWh")
