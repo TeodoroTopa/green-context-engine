@@ -1,16 +1,27 @@
 source: noaa
 description: >
-  NOAA Climate Data Online — monthly temperature and precipitation summaries
-  from the Global Summary of the Month (GSOM) dataset. Covers 180+ countries
-  and all US states via the Global Historical Climatology Network.
+  NOAA Climate Data Online — temperature, precipitation, and energy-relevant
+  degree day data from GSOY (yearly) and GSOM (monthly) datasets. Station
+  readings are averaged to produce country/state-level values. Useful for
+  connecting energy stories to climate trends and energy demand patterns.
 connector: pipeline.sources.noaa.NOAASource
 env_key: NOAA_API_KEY
 
 data_types:
-  - monthly average temperature (TAVG, Celsius)
-  - monthly maximum temperature (TMAX, Celsius)
-  - monthly minimum temperature (TMIN, Celsius)
-  - monthly total precipitation (PRCP, mm)
+  - "yearly_temperature: annual average, max, and min temperature in °C (GSOY dataset, station-averaged)"
+  - "yearly_precipitation: annual total precipitation in mm (GSOY dataset, station-averaged)"
+  - "heating_degree_days: annual heating degree days — measures cold-weather energy demand (GSOY)"
+  - "cooling_degree_days: annual cooling degree days — measures hot-weather energy demand (GSOY)"
+  - "monthly_temperature: monthly average, max, and min temperature in °C (GSOM dataset)"
+  - "monthly_precipitation: monthly total precipitation in mm (GSOM dataset)"
+
+selectable: true
+note: >
+  The strategist can request specific data_types per fetch. For example,
+  a story about a heat wave should request ["yearly_temperature", "cooling_degree_days"].
+  A story about energy demand might only need ["heating_degree_days", "cooling_degree_days"].
+  Default (no data_types specified): yearly temp + precip + both degree days.
+  US has much denser station coverage than international locations.
 
 entities:
   us_states:

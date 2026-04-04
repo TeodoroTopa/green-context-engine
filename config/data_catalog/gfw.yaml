@@ -1,17 +1,23 @@
 source: gfw
 description: >
-  Global Forest Watch tree cover loss data (globalforestwatch.org).
-  Satellite-derived deforestation tracking at 30m resolution.
-  Covers tree cover loss by country from 2000-2024. Useful for
-  connecting energy stories to land use and deforestation impacts.
+  Global Forest Watch — satellite-derived deforestation, land-use drivers,
+  and forest carbon data at 30m resolution. Country-level queries via
+  geostore boundaries. Connects energy stories to land use, biodiversity,
+  and carbon impacts.
 connector: pipeline.sources.gfw.GFWSource
 env_key: GFW_API_KEY
 
 data_types:
-  - tree cover loss by country (hectares per year, 2000-2024)
-  - deforestation alerts (near real-time)
-  - forest carbon net flux
-  - forest carbon gross emissions
+  - "tree_cover_loss: annual hectares of tree cover lost per year (2000-2024, UMD Hansen 30m)"
+  - "deforestation_drivers: % breakdown by cause — commodity agriculture (palm, soy, cattle), forestry, shifting agriculture, wildfire, urbanization (1km resolution, 2001-2024, 90.5% accuracy)"
+  - "carbon_emissions: annual forest carbon gross emissions in tonnes CO2e per year (30m resolution)"
+
+selectable: true
+note: >
+  The strategist can request specific data_types per fetch. For example,
+  a story about palm oil deforestation should request ["tree_cover_loss", "deforestation_drivers"],
+  while a climate story might want ["tree_cover_loss", "carbon_emissions"].
+  All three are fetched by default if no data_types specified.
 
 coverage: "Global — all countries with forest cover"
 

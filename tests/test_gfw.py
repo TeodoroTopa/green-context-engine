@@ -47,7 +47,7 @@ def test_get_generation_context_returns_loss_data(mock_requests, mock_set, mock_
     import requests as real_requests
     mock_requests.RequestException = real_requests.RequestException
 
-    # Two GET calls: geostore lookup, then query
+    # Geostore lookup + tree_cover_loss query (selective: only tree_cover_loss)
     geostore_resp = MagicMock()
     geostore_resp.json.return_value = {"data": {"id": "fake-geostore-id"}}
 
@@ -61,13 +61,41 @@ def test_get_generation_context_returns_loss_data(mock_requests, mock_set, mock_
     mock_requests.get.side_effect = [geostore_resp, query_resp]
 
     gfw = GFWSource(api_key="test-key")
-    result = gfw.get_generation_context("Indonesia")
+    result = gfw.get_generation_context("Indonesia", data_types=["tree_cover_loss"])
 
     assert result["entity"] == "Indonesia"
     assert result["source"] == "gfw"
     assert len(result["tree_cover_loss"]) == 2
     assert result["tree_cover_loss"][0]["year"] == 2024
-    assert result["tree_cover_loss"][0]["loss_ha"] == 120000
+    assert "deforestation_drivers" not in result  # not requested
+
+
+@patch("pipeline.sources.gfw.get_cached", return_value=None)
+@patch("pipeline.sources.gfw.set_cached")
+@patch("pipeline.sources.gfw.requests")
+def test_get_generation_context_returns_drivers(mock_requests, mock_set, mock_get):
+    """get_generation_context returns deforestation drivers when requested."""
+    import requests as real_requests
+    mock_requests.RequestException = real_requests.RequestException
+
+    geostore_resp = MagicMock()
+    geostore_resp.json.return_value = {"data": {"id": "fake-geostore-id"}}
+
+    drivers_resp = MagicMock()
+    drivers_resp.json.return_value = {
+        "data": [
+            {"tsc_tree_cover_loss_drivers__driver": "Commodity driven deforestation", "area_ha": 57000},
+            {"tsc_tree_cover_loss_drivers__driver": "Forestry", "area_ha": 23000},
+            {"tsc_tree_cover_loss_drivers__driver": "Shifting agriculture", "area_ha": 20000},
+        ]
+    }
+    mock_requests.get.side_effect = [geostore_resp, drivers_resp]
+
+    gfw = GFWSource(api_key="test-key")
+    result = gfw.get_generation_context("Indonesia", data_types=["deforestation_drivers"])
+
+    assert result["deforestation_drivers"]["Commodity driven deforestation"] == 57.0
+    assert "tree_cover_loss" not in result  # not requested
 
 
 def test_get_generation_context_unknown_country():

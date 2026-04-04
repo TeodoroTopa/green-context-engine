@@ -26,11 +26,16 @@ Rules:
 - ALWAYS fetch from at least 2 different sources. This is mandatory.
 - Pick 1-3 PRIMARY entities — the countries/regions the story is about.
 - Pick 2-4 BENCHMARK entities — comparison groups from relevant sources.
+- For each fetch, you can optionally specify "data_types" — a list of specific
+  data to request from that source. Check the catalog for available data_types
+  per source. If omitted, the source returns all available data.
 - For any story with a geographic location:
   * Ember: electricity generation, carbon intensity, emissions (always relevant)
-  * GFW: tree cover loss if the country has forests (connects energy to land use)
+  * GFW: tree cover loss, deforestation drivers (WHY forests are lost), carbon emissions
+  * NOAA: temperature trends, precipitation, heating/cooling degree days (energy demand)
   * IUCN: threatened species if biodiversity angle exists
-  * EIA: US-specific electricity data (only for US stories, use state abbreviations)
+  * EIA: US-specific electricity data (only for US stories)
+  * Electricity Maps: real-time carbon intensity (if key configured)
 - Always include Ember World as a global baseline.
 - EIA only covers the US — don't request non-US entities from EIA.
 - Only request entities that exist in the catalog for that source.
@@ -39,13 +44,23 @@ Example — Indonesia deforestation story:
 {{
   "fetches": [
     {{"source": "ember", "entity": "Indonesia", "role": "primary"}},
-    {{"source": "gfw", "entity": "Indonesia", "role": "primary"}},
-    {{"source": "iucn", "entity": "Indonesia", "role": "primary"}},
+    {{"source": "gfw", "entity": "Indonesia", "role": "primary", "data_types": ["tree_cover_loss", "deforestation_drivers"]}},
     {{"source": "ember", "entity": "ASEAN", "role": "benchmark"}},
     {{"source": "ember", "entity": "World", "role": "benchmark"}},
-    {{"source": "gfw", "entity": "Brazil", "role": "benchmark"}}
+    {{"source": "gfw", "entity": "Brazil", "role": "benchmark", "data_types": ["tree_cover_loss"]}}
   ],
-  "reasoning": "Cross-source: Ember for grid carbon intensity, GFW for deforestation rates, IUCN for biodiversity pressure. Compare to ASEAN/World on energy, Brazil on deforestation."
+  "reasoning": "Ember for grid carbon intensity + GFW for deforestation rates and drivers. Compare to ASEAN/World on energy, Brazil on deforestation."
+}}
+
+Example — US heat wave + energy demand story:
+{{
+  "fetches": [
+    {{"source": "ember", "entity": "United States", "role": "primary"}},
+    {{"source": "noaa", "entity": "Texas", "role": "primary", "data_types": ["yearly_temperature", "cooling_degree_days"]}},
+    {{"source": "eia", "entity": "Texas", "role": "primary"}},
+    {{"source": "ember", "entity": "World", "role": "benchmark"}}
+  ],
+  "reasoning": "EIA for Texas grid mix, NOAA for temperature + cooling demand, Ember for US/global comparison."
 }}
 
 Return JSON only:

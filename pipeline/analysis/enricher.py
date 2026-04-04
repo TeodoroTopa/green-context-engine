@@ -219,6 +219,26 @@ class Enricher:
                 for r in loss[:5]:
                     lines.append(f"  {r['year']}: {r['loss_ha']:,.0f} hectares")
 
+            # GFW: deforestation drivers
+            drivers = context.get("deforestation_drivers", {})
+            if drivers:
+                lines.append("Deforestation drivers (GFW, cumulative %):")
+                for driver, pct in sorted(drivers.items(), key=lambda x: x[1], reverse=True):
+                    lines.append(f"  {driver}: {pct}%")
+
+            # GFW: carbon emissions from forest loss
+            carbon_e = context.get("carbon_emissions", [])
+            if carbon_e:
+                lines.append("Forest carbon emissions (GFW):")
+                for r in carbon_e[:5]:
+                    tonnes = r["co2e_tonnes"]
+                    if tonnes >= 1e9:
+                        lines.append(f"  {r['year']}: {tonnes/1e9:.2f} billion tonnes CO2e")
+                    elif tonnes >= 1e6:
+                        lines.append(f"  {r['year']}: {tonnes/1e6:.1f} million tonnes CO2e")
+                    else:
+                        lines.append(f"  {r['year']}: {tonnes:,.0f} tonnes CO2e")
+
             # IUCN: threatened species
             species = context.get("threatened_species", {})
             if species:
@@ -230,15 +250,37 @@ class Enricher:
                 if total:
                     lines.append(f"  Total assessed: {total}")
 
-            # NOAA: temperature and precipitation
+            # NOAA: yearly summaries
+            yearly_temp = context.get("yearly_temperature", [])
+            if yearly_temp:
+                lines.append("Yearly temperature (NOAA):")
+                for r in yearly_temp[:9]:
+                    lines.append(f"  {r['year']} {r['type']}: {r['value_celsius']}°C")
+            yearly_precip = context.get("yearly_precipitation", [])
+            if yearly_precip:
+                lines.append("Yearly precipitation (NOAA):")
+                for r in yearly_precip[:3]:
+                    lines.append(f"  {r['year']}: {r['total_mm']} mm")
+            hdd = context.get("heating_degree_days", [])
+            if hdd:
+                lines.append("Heating degree days (NOAA):")
+                for r in hdd[:3]:
+                    lines.append(f"  {r['year']}: {r['value']}")
+            cdd = context.get("cooling_degree_days", [])
+            if cdd:
+                lines.append("Cooling degree days (NOAA):")
+                for r in cdd[:3]:
+                    lines.append(f"  {r['year']}: {r['value']}")
+
+            # NOAA: monthly data (fallback)
             temp = context.get("temperature", [])
             if temp:
-                lines.append("Temperature (NOAA, monthly avg):")
+                lines.append("Monthly temperature (NOAA):")
                 for r in temp[:6]:
                     lines.append(f"  {r['date']} {r['type']}: {r['value_celsius']}°C")
             precip = context.get("precipitation", [])
             if precip:
-                lines.append("Precipitation (NOAA):")
+                lines.append("Monthly precipitation (NOAA):")
                 for r in precip[:6]:
                     lines.append(f"  {r['date']}: {r['value_mm']} mm")
 

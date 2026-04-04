@@ -42,20 +42,19 @@ def test_fetch_sends_token_header(mock_requests, mock_set, mock_get):
 @patch("pipeline.sources.noaa.get_cached", return_value=None)
 @patch("pipeline.sources.noaa.set_cached")
 @patch("pipeline.sources.noaa.requests")
-def test_get_generation_context_returns_climate_data(mock_requests, mock_set, mock_get):
-    """get_generation_context returns station-averaged temperature and precipitation."""
+def test_get_generation_context_returns_yearly_data(mock_requests, mock_set, mock_get):
+    """Default fetch returns station-averaged yearly temp + degree days from GSOY."""
     import requests as real_requests
     mock_requests.RequestException = real_requests.RequestException
 
-    # Simulate multiple stations for the same month (GSOM returns per-station)
     mock_resp = MagicMock()
     mock_resp.json.return_value = {
         "results": [
-            {"datatype": "TAVG", "date": "2024-06-01T00:00:00", "station": "S1", "value": 22.0},
-            {"datatype": "TAVG", "date": "2024-06-01T00:00:00", "station": "S2", "value": 24.0},
-            {"datatype": "TMAX", "date": "2024-06-01T00:00:00", "station": "S1", "value": 31.0},
-            {"datatype": "PRCP", "date": "2024-06-01T00:00:00", "station": "S1", "value": 85.0},
-            {"datatype": "PRCP", "date": "2024-06-01T00:00:00", "station": "S2", "value": 90.0},
+            {"datatype": "TAVG", "date": "2023-01-01T00:00:00", "station": "S1", "value": 12.0},
+            {"datatype": "TAVG", "date": "2023-01-01T00:00:00", "station": "S2", "value": 14.0},
+            {"datatype": "CLDD", "date": "2023-01-01T00:00:00", "station": "S1", "value": 800.0},
+            {"datatype": "CLDD", "date": "2023-01-01T00:00:00", "station": "S2", "value": 1000.0},
+            {"datatype": "PRCP", "date": "2023-01-01T00:00:00", "station": "S1", "value": 900.0},
         ]
     }
     mock_requests.get.return_value = mock_resp
@@ -65,27 +64,43 @@ def test_get_generation_context_returns_climate_data(mock_requests, mock_set, mo
 
     assert result["entity"] == "Germany"
     assert result["source"] == "noaa"
-    # TAVG: avg of 22.0 and 24.0 = 23.0 (no /10 — GSOM is already in °C)
-    tavg = [t for t in result["temperature"] if t["type"] == "TAVG"]
+    tavg = [t for t in result.get("yearly_temperature", []) if t["type"] == "TAVG"]
     assert len(tavg) == 1
-    assert tavg[0]["value_celsius"] == 23.0
-    # TMAX: only 1 station = 31.0
-    tmax = [t for t in result["temperature"] if t["type"] == "TMAX"]
-    assert len(tmax) == 1
-    assert tmax[0]["value_celsius"] == 31.0
-    # PRCP: avg of 85.0 and 90.0 = 87.5
-    assert len(result["precipitation"]) == 1
-    assert result["precipitation"][0]["value_mm"] == 87.5
+    assert tavg[0]["value_celsius"] == 13.0  # avg of 12 and 14
+    cdd = result.get("cooling_degree_days", [])
+    assert len(cdd) == 1
+    assert cdd[0]["value"] == 900.0  # avg of 800 and 1000
+
+
+@patch("pipeline.sources.noaa.get_cached", return_value=None)
+@patch("pipeline.sources.noaa.set_cached")
+@patch("pipeline.sources.noaa.requests")
+def test_selective_data_types(mock_requests, mock_set, mock_get):
+    """data_types parameter controls which data is fetched."""
+    import requests as real_requests
+    mock_requests.RequestException = real_requests.RequestException
+
+    mock_resp = MagicMock()
+    mock_resp.json.return_value = {
+        "results": [
+            {"datatype": "TAVG", "date": "2024-06-01T00:00:00", "station": "S1", "value": 22.0},
+        ]
+    }
+    mock_requests.get.return_value = mock_resp
+
+    noaa = NOAASource(api_key="test-token")
+    result = noaa.get_generation_context("Germany", data_types=["monthly_temperature"])
+
+    assert "temperature" in result
+    assert "cooling_degree_days" not in result
 
 
 def test_get_generation_context_unknown_country():
-    """Returns empty data for countries not in the FIPS mapping."""
+    """Returns minimal dict for countries not in the FIPS mapping."""
     noaa = NOAASource(api_key="test-token")
     result = noaa.get_generation_context("Atlantis")
 
     assert result["entity"] == "Atlantis"
-    assert result["temperature"] == []
-    assert result["precipitation"] == []
     assert result["source"] == "noaa"
 
 
