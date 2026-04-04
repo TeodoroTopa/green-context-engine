@@ -94,6 +94,51 @@ def test_is_empty_data():
     assert Enricher._is_empty_data({"entity": "X", "total_assessed": 500}) is False
 
 
+def test_format_primary_data_includes_gfw():
+    """_format_primary_data formats GFW tree cover loss data."""
+    client = MagicMock()
+    sources = {"ember": MagicMock()}
+    enricher = Enricher(sources, client)
+
+    data = {
+        "Indonesia": {
+            "entity": "Indonesia",
+            "tree_cover_loss": [
+                {"year": 2024, "loss_ha": 1310626.0},
+                {"year": 2023, "loss_ha": 1663453.0},
+            ],
+            "source": "gfw",
+        }
+    }
+    result = enricher._format_primary_data(data)
+    assert "Tree cover loss" in result
+    assert "2024" in result
+    assert "1,310,626" in result
+    assert "Indonesia" in result
+
+
+def test_format_primary_data_mixed_ember_gfw():
+    """_format_primary_data handles both Ember and GFW data for same entity."""
+    client = MagicMock()
+    sources = {"ember": MagicMock()}
+    enricher = Enricher(sources, client)
+
+    data = {
+        "Indonesia": {
+            "entity": "Indonesia",
+            "generation": [{"series": "Coal", "generation_twh": 228, "date": "2024"}],
+            "carbon_intensity": [{"emissions_intensity_gco2_per_kwh": 680, "date": "2024"}],
+            "tree_cover_loss": [{"year": 2024, "loss_ha": 1310626.0}],
+        }
+    }
+    result = enricher._format_primary_data(data)
+    assert "Generation mix" in result
+    assert "Carbon intensity" in result
+    assert "Tree cover loss" in result
+    assert "Coal" in result
+    assert "1,310,626" in result
+
+
 def test_enrich_falls_back_on_strategist_failure():
     """Enricher uses default plan when strategist returns bad JSON."""
     client = MagicMock()

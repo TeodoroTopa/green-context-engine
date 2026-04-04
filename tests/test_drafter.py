@@ -34,9 +34,11 @@ sources:
 status: draft
 ---
 
-Germany added 10 GW of solar capacity in 2025, pushing the country's solar share to 15% of total generation (Ember). That marks a 20% year-over-year increase.
+**The story.** Germany added 10 GW of solar capacity in 2025, pushing the country's solar share to 15% of total electricity generation (Ember).
 
-The shift carries a trade-off: grid stability costs rise with intermittent capacity, but Germany's carbon intensity dropped to 350 gCO2/kWh, well below the EU average of 420 gCO2/kWh (Ember).
+**What the data shows.** That marks a 20% year-over-year increase. Germany's carbon intensity — how much CO2 each unit of electricity produces — dropped to 350 gCO2/kWh, well below the EU average of 420 (Ember).
+
+**The trade-off.** Grid stability costs rise with more intermittent solar capacity, but the emissions payoff is already measurable.
 """
 
 
@@ -64,15 +66,8 @@ def test_prompt_enforces_editorial_rules():
     from pipeline.generation.prompts.energy_brief import SYSTEM_PROMPT
     assert "300 words" in SYSTEM_PROMPT.lower()
     assert "NEVER mention missing data" in SYSTEM_PROMPT
-    assert "NO section headers" in SYSTEM_PROMPT
     assert "PUBLIC-FACING" in SYSTEM_PROMPT
-
-
-def test_voice_check_catches_section_headers():
-    draft = '---\ntitle: "Test"\n---\n\n## The Hook\n\nSome content.\n\n### Details\n\nMore.'
-    violations = check_voice(draft)
-    assert any("section header" in v.lower() for v in violations)
-    assert len([v for v in violations if "section header" in v.lower()]) == 2
+    assert "NOT energy-sector specialists" in SYSTEM_PROMPT or "NOT sector specialists" in SYSTEM_PROMPT
 
 
 def test_draft_saves_file(tmp_path):

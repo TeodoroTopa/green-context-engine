@@ -158,13 +158,14 @@ class Enricher:
             messages=[{
                 "role": "user",
                 "content": (
-                    "You are an energy data analyst. Given this news story and electricity data, "
+                    "You are an energy and environmental data analyst. Given this news story "
+                    "and the data from multiple sources (electricity, forest cover, climate, biodiversity), "
                     "provide:\n"
                     "1. A brief summary of what the data shows (2-3 sentences)\n"
                     "2. 2-3 suggested angles for an energy intelligence brief\n\n"
                     "Return JSON: {\"summary\": \"...\", \"angles\": [\"...\", \"...\"]}\n\n"
                     f"## Story\nTitle: {story.title}\nSummary: {story.summary}\n\n"
-                    f"## Electricity Data\n{data_text}"
+                    f"## Data\n{data_text}"
                 ),
             }],
         )
@@ -200,6 +201,47 @@ class Enricher:
                     f"Carbon intensity ({latest_c['date']}): "
                     f"{latest_c.get('emissions_intensity_gco2_per_kwh', '?')} gCO2/kWh"
                 )
+
+            # GFW: tree cover loss
+            loss = context.get("tree_cover_loss", [])
+            if loss:
+                lines.append("Tree cover loss (GFW):")
+                for r in loss[:5]:
+                    lines.append(f"  {r['year']}: {r['loss_ha']:,.0f} hectares")
+
+            # IUCN: threatened species
+            species = context.get("threatened_species", {})
+            if species:
+                lines.append("Threatened species (IUCN):")
+                for category, count in species.items():
+                    if count > 0:
+                        lines.append(f"  {category}: {count}")
+                total = context.get("total_assessed", 0)
+                if total:
+                    lines.append(f"  Total assessed: {total}")
+
+            # NOAA: temperature and precipitation
+            temp = context.get("temperature", [])
+            if temp:
+                lines.append("Temperature (NOAA, monthly avg):")
+                for r in temp[:6]:
+                    lines.append(f"  {r['date']} {r['type']}: {r['value_celsius']}°C")
+            precip = context.get("precipitation", [])
+            if precip:
+                lines.append("Precipitation (NOAA):")
+                for r in precip[:6]:
+                    lines.append(f"  {r['date']}: {r['value_mm']} mm")
+
+            # Electricity Maps: real-time data
+            ci_rt = context.get("carbon_intensity_realtime")
+            if ci_rt is not None:
+                lines.append(f"Real-time carbon intensity (Electricity Maps): {ci_rt} gCO2eq/kWh")
+            breakdown = context.get("power_breakdown", {})
+            if breakdown:
+                lines.append("Power mix, real-time (Electricity Maps):")
+                for src, mw in sorted(breakdown.items(), key=lambda x: x[1], reverse=True):
+                    lines.append(f"  {src}: {mw} MW")
+
             parts.append("\n".join(lines))
         return "\n\n".join(parts)
 

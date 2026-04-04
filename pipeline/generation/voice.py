@@ -34,21 +34,4 @@ def check_voice(draft: str) -> list[str]:
             violations.append(
                 f"Data gap language: '{phrase}' — omit the topic instead of discussing missing data"
             )
-    # Check for section headers in the body (after frontmatter)
-    body = _extract_body(draft)
-    for line in body.splitlines():
-        if line.startswith("## ") or line.startswith("### "):
-            violations.append(
-                f"Section header found: '{line.strip()}' — write continuous prose, no headers"
-            )
     return violations
-
-
-def _extract_body(draft: str) -> str:
-    """Return the draft body after YAML frontmatter."""
-    if draft.startswith("---"):
-        # Find the closing --- of frontmatter
-        end = draft.find("---", 3)
-        if end != -1:
-            return draft[end + 3:]
-    return draft

@@ -174,21 +174,30 @@ class NOAASource(BaseSource):
             )
             results = raw.get("results", [])
 
+            # GSOM returns per-station readings. Aggregate by month+datatype.
+            from collections import defaultdict
+            buckets = defaultdict(list)  # key: (date, datatype) → [values]
             for r in results:
                 datatype = r.get("datatype", "")
                 date = r.get("date", "")[:7]  # YYYY-MM
                 value = r.get("value")
+                if value is not None:
+                    # GSOM returns values already in °C (temp) and mm (precip)
+                    # — no /10 conversion needed (unlike GHCND daily data)
+                    buckets[(date, datatype)].append(value)
 
+            for (date, datatype), values in sorted(buckets.items()):
+                avg = sum(values) / len(values)
                 if datatype in ("TAVG", "TMAX", "TMIN"):
                     temperature.append({
                         "date": date,
                         "type": datatype,
-                        "value_celsius": value / 10 if value is not None else None,
+                        "value_celsius": round(avg, 1),
                     })
                 elif datatype == "PRCP":
                     precipitation.append({
                         "date": date,
-                        "value_mm": value / 10 if value is not None else None,
+                        "value_mm": round(avg, 1),
                     })
 
         except requests.RequestException as e:
