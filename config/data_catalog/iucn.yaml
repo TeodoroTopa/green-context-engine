@@ -1,0 +1,58 @@
+source: iucn
+description: >
+  IUCN Red List threatened species data (iucnredlist.org). Provides species
+  assessment counts by country and threat category (Critically Endangered,
+  Endangered, Vulnerable, etc.). Useful for connecting energy/land-use stories
+  to biodiversity impacts. Data updates 2-3x per year.
+connector: pipeline.sources.iucn.IUCNSource
+env_key: IUCN_API_KEY
+
+data_types:
+  - threatened species count by country and threat category
+  - species assessments (CR, EN, VU, NT, LC, DD, EX, EW)
+  - total assessed species per country
+
+coverage: "Global — all countries with IUCN assessments"
+
+entities:
+  high_biodiversity:
+    - Indonesia
+    - Brazil
+    - Colombia
+    - Mexico
+    - Australia
+    - Madagascar
+    - Peru
+    - Ecuador
+    - India
+    - China
+    - Malaysia
+    - Papua New Guinea
+    - Philippines
+  african:
+    - South Africa
+    - Tanzania (the United Republic of)
+    - Kenya
+    - Congo (DRC)
+    - Cameroon
+    - Nigeria
+  southeast_asian:
+    - Myanmar
+    - Viet Nam
+    - Thailand
+    - Cambodia
+    - Lao PDR
+    - Sri Lanka
+  other:
+    - United States
+    - Japan
+    - Germany
+    - France
+    - United Kingdom
+    - Chile
+    - Argentina
+    - Bolivia
+    - New Zealand
+    - Costa Rica
+    - Panama
+    - Nepal

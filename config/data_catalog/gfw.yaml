@@ -1,0 +1,60 @@
+source: gfw
+description: >
+  Global Forest Watch tree cover loss data (globalforestwatch.org).
+  Satellite-derived deforestation tracking at 30m resolution.
+  Covers tree cover loss by country from 2000-2024. Useful for
+  connecting energy stories to land use and deforestation impacts.
+connector: pipeline.sources.gfw.GFWSource
+env_key: GFW_API_KEY
+
+data_types:
+  - tree cover loss by country (hectares per year, 2000-2024)
+  - deforestation alerts (near real-time)
+  - forest carbon net flux
+  - forest carbon gross emissions
+
+coverage: "Global — all countries with forest cover"
+
+entities:
+  high_deforestation:
+    - Indonesia
+    - Brazil
+    - Congo (DRC)
+    - Malaysia
+    - Colombia
+    - Bolivia
+    - Peru
+    - Myanmar
+    - Cambodia
+    - Lao PDR
+    - Paraguay
+    - Madagascar
+    - Mozambique
+    - Papua New Guinea
+  major_economies:
+    - India
+    - China
+    - United States
+    - Russia
+    - Canada
+    - Australia
+    - Mexico
+    - Argentina
+  other:
+    - Thailand
+    - Nigeria
+    - Cameroon
+    - Ghana
+    - Cote d'Ivoire
+    - Tanzania (the United Republic of)
+    - Kenya
+    - Philippines
+    - Viet Nam
+    - Ecuador
+    - Chile
+    - South Africa
+    - Germany
+    - France
+    - United Kingdom
+    - Japan
+    - South Korea

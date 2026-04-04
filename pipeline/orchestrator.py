@@ -22,6 +22,8 @@ from pipeline.monitors.rss_monitor import RSSMonitor
 from pipeline.publishing.notion import NotionPublisher
 from pipeline.sources.eia import EIASource
 from pipeline.sources.ember import EmberSource
+from pipeline.sources.gfw import GFWSource
+from pipeline.sources.iucn import IUCNSource
 from pipeline.usage import UsageTracker
 
 logger = logging.getLogger(__name__)
@@ -51,6 +53,14 @@ class Pipeline:
         if eia_key:
             sources["eia"] = EIASource(api_key=eia_key)
             logger.info("EIA source enabled")
+        gfw_key = os.getenv("GFW_API_KEY")
+        if gfw_key:
+            sources["gfw"] = GFWSource(api_key=gfw_key)
+            logger.info("GFW source enabled")
+        iucn_key = os.getenv("IUCN_API_KEY")
+        if iucn_key:
+            sources["iucn"] = IUCNSource(api_key=iucn_key)
+            logger.info("IUCN source enabled")
 
         self.enricher = Enricher(sources, self.client)
         self.drafter = Drafter(self.client)
