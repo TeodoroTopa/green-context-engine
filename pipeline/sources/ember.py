@@ -68,7 +68,7 @@ class EmberSource(BaseSource):
         set_cached(key, data)
         return data
 
-    def get_generation_context(self, entity: str, start_date: str = "2020") -> dict[str, Any]:
+    def get_generation_context(self, entity: str, start_date: str = "2020", **kwargs: Any) -> dict[str, Any]:
         """Get electricity generation mix + carbon intensity for a country.
 
         This is the main method the enricher calls. It combines two API calls

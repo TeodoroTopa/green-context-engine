@@ -134,7 +134,7 @@ class EIASource(BaseSource):
         set_cached(key, data)
         return data
 
-    def get_generation_context(self, entity: str, start_date: str = "2020") -> dict[str, Any]:
+    def get_generation_context(self, entity: str, start_date: str = "2020", **kwargs: Any) -> dict[str, Any]:
         """Get electricity generation data for a US entity.
 
         EIA's electricity endpoints cover US national and state-level data.
