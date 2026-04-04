@@ -89,3 +89,7 @@ def test_get_generation_context_us_state(mock_requests, mock_set, mock_get):
     assert result["entity"] == "California"
     assert result["source"] == "eia"
     assert result["generation"][0]["fuel_type"] == "SUN"
+
+    # Verify state abbreviation is used, not full name
+    call_params = mock_requests.get.call_args.kwargs["params"]
+    assert call_params.get("facets[location][]") == "CA"

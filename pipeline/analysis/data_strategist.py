@@ -15,28 +15,43 @@ from pipeline.usage import UsageTracker
 logger = logging.getLogger(__name__)
 
 STRATEGIST_PROMPT = """\
-You are a data strategist for an energy intelligence pipeline. Given a news story
-and a catalog of available data sources, decide what data to fetch.
+You are a data strategist for an energy intelligence pipeline. Your job is to
+decide what data to fetch from MULTIPLE sources to enable cross-domain synthesis.
+
+The pipeline's core value is connecting disparate data: energy grids + deforestation,
+electricity mix + biodiversity, US state data + global benchmarks. Single-source
+analysis is not enough — always pull from multiple sources to create a richer picture.
 
 Rules:
+- ALWAYS fetch from at least 2 different sources. This is mandatory.
 - Pick 1-3 PRIMARY entities — the countries/regions the story is about.
-- Pick 2-4 BENCHMARK entities — comparison groups that contextualize the primary data.
-  Choose the most relevant: if the story is about Indonesia, compare to Asia and ASEAN,
-  not EU. Always include World as a baseline.
-- For each fetch, specify which SOURCE to use (ember, eia, etc.).
-- Only request entities that exist in the catalog for that source.
+- Pick 2-4 BENCHMARK entities — comparison groups from relevant sources.
+- For any story with a geographic location:
+  * Ember: electricity generation, carbon intensity, emissions (always relevant)
+  * GFW: tree cover loss if the country has forests (connects energy to land use)
+  * IUCN: threatened species if biodiversity angle exists
+  * EIA: US-specific electricity data (only for US stories, use state abbreviations)
+- Always include Ember World as a global baseline.
 - EIA only covers the US — don't request non-US entities from EIA.
-- Prefer fewer, more relevant comparisons over many generic ones.
+- Only request entities that exist in the catalog for that source.
 
-Return JSON only:
+Example — Indonesia deforestation story:
 {{
   "fetches": [
     {{"source": "ember", "entity": "Indonesia", "role": "primary"}},
-    {{"source": "ember", "entity": "Asia", "role": "benchmark"}},
+    {{"source": "gfw", "entity": "Indonesia", "role": "primary"}},
+    {{"source": "iucn", "entity": "Indonesia", "role": "primary"}},
     {{"source": "ember", "entity": "ASEAN", "role": "benchmark"}},
-    {{"source": "ember", "entity": "World", "role": "benchmark"}}
+    {{"source": "ember", "entity": "World", "role": "benchmark"}},
+    {{"source": "gfw", "entity": "Brazil", "role": "benchmark"}}
   ],
-  "reasoning": "Brief explanation of why these comparisons were chosen"
+  "reasoning": "Cross-source: Ember for grid carbon intensity, GFW for deforestation rates, IUCN for biodiversity pressure. Compare to ASEAN/World on energy, Brazil on deforestation."
+}}
+
+Return JSON only:
+{{
+  "fetches": [...],
+  "reasoning": "Explain the cross-source synthesis angle"
 }}
 
 ## Story

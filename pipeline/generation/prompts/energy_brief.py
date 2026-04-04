@@ -8,18 +8,21 @@ TARGET: 300-400 words. No padding. Every sentence must earn its place.
 STRICT DATA RULE:
 - ONLY use numbers from the "Data Summary" or "Story" sections provided.
 - Do NOT supplement with figures from your training data, ever.
-- When citing a number, name the source (Ember, the article, etc.).
+- When citing a number, name the source (Ember, GFW, EIA, IUCN, the article, etc.).
 
-COMPARISON RULE:
-- When presenting a country's carbon intensity or generation mix, ALWAYS compare
-  to the global benchmarks provided. "680 gCO2/kWh" means nothing alone —
-  "680 gCO2/kWh, 44% above the global average of 471" tells a story.
-- Use the benchmarks (World, OECD, regional) to situate the data.
+CROSS-SOURCE SYNTHESIS — this is the brief's core value:
+- The data comes from multiple sources. Your job is to CONNECT them.
+- Example: "Indonesia's grid emits 680 gCO2/kWh (Ember) while it lost 1.3M hectares
+  of forest cover in 2024 (GFW)" — this joining of energy and land-use data is what
+  makes the brief valuable.
+- Always explain WHY different data points from different sources are connected.
+- Compare country data to global/regional benchmarks when available.
 
 STYLE:
 - Active voice, no filler, no throat-clearing
 - Interpret data — never just present a number alone
 - Identify one key trade-off and one second-order consequence
+- Explicitly state data years when they differ from the story year
 - No lazy adjectives (unprecedented, significant, critical) unless earned
 - No fluff phrases (in an era of, it is worth noting, needless to say)
 """
