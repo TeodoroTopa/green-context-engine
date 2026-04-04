@@ -72,8 +72,66 @@ class Pipeline:
             self.notion = None
             logger.info("Notion token not configured — drafts will be saved locally only")
 
+    def research_and_draft(
+        self, story, tracker: UsageTracker | None = None,
+    ) -> tuple:
+        """Core pipeline: enrich a story with data, draft a brief, and edit it.
+
+        This method has NO publishing side effects (no Notion, no GitHub).
+
+        Args:
+            story: A Story object (from RSS or constructed manually).
+            tracker: Optional usage tracker. A new one is created if None.
+
+        Returns:
+            Tuple of (EnrichedStory, Path, edit_result dict).
+
+        Raises:
+            ValueError: If no data is available for this story.
+        """
+        if tracker is None:
+            tracker = UsageTracker()
+
+        enriched = self.enricher.enrich(story, tracker)
+        if not enriched.ember_data:
+            raise ValueError(f"No data available for '{story.title}'")
+
+        draft_path = self.drafter.draft(enriched, tracker)
+        logger.info(f"Drafted: {draft_path.name}")
+
+        max_revisions = 2
+        edit_result = {"pass": False, "summary": "Not checked"}
+        for attempt in range(max_revisions + 1):
+            edit_result = check_draft(
+                self.client, self.drafter.model, draft_path,
+                story_title=story.title,
+                story_summary=story.summary,
+                story_source=story.source,
+                data_text=enriched.data_text,
+                tracker=tracker,
+            )
+            if edit_result["pass"]:
+                logger.info(f"Editor PASSED: {draft_path.name}")
+                break
+            if attempt < max_revisions:
+                logger.info(
+                    f"Editor found errors (attempt {attempt + 1}/{max_revisions}), revising..."
+                )
+                self.drafter.revise(
+                    draft_path, edit_result.get("errors", []),
+                    enriched.data_text, tracker,
+                )
+            else:
+                logger.warning(
+                    f"Editor still failing after {max_revisions} revisions: "
+                    f"{edit_result['summary']}"
+                )
+
+        logger.info(f"  {tracker.summary()}")
+        return enriched, draft_path, edit_result
+
     def run(self, source: str | None = None, max_stories: int = 5) -> list[Path]:
-        """Run the full pipeline.
+        """Run the full pipeline: discover stories via RSS, enrich, draft, and publish.
 
         Args:
             source: Filter to feeds from this source (e.g. "mongabay")
@@ -101,51 +159,21 @@ class Pipeline:
                     notion_page_id = self.notion.create_story(
                         story.title, source_url=story.url, source_name=story.source,
                     )
-
-                # Enrich (strategist + data fetch + analysis)
-                if self.notion and notion_page_id:
                     self.notion.update_status(notion_page_id, "Enriching")
+
                 tracker = UsageTracker()
-                enriched = self.enricher.enrich(story, tracker)
-                if not enriched.ember_data:
+                try:
+                    enriched, draft_path, edit_result = self.research_and_draft(
+                        story, tracker,
+                    )
+                except ValueError:
                     logger.warning(f"Skipping '{story.title}' — no data available")
                     if self.notion and notion_page_id:
                         self.notion.update_status(notion_page_id, "Queued")
                     continue
 
-                # Draft → Edit → Revise loop (max 2 revision attempts)
-                draft_path = self.drafter.draft(enriched, tracker)
                 drafts.append(draft_path)
-                logger.info(f"Drafted: {draft_path.name}")
 
-                max_revisions = 2
-                for attempt in range(max_revisions + 1):
-                    edit_result = check_draft(
-                        self.client, self.drafter.model, draft_path,
-                        story_title=story.title,
-                        story_summary=story.summary,
-                        story_source=story.source,
-                        data_text=enriched.data_text,
-                        tracker=tracker,
-                    )
-                    if edit_result["pass"]:
-                        logger.info(f"Editor PASSED: {draft_path.name}")
-                        break
-                    if attempt < max_revisions:
-                        logger.info(
-                            f"Editor found errors (attempt {attempt + 1}/{max_revisions}), revising..."
-                        )
-                        self.drafter.revise(
-                            draft_path, edit_result.get("errors", []),
-                            enriched.data_text, tracker,
-                        )
-                    else:
-                        logger.warning(
-                            f"Editor still failing after {max_revisions} revisions: "
-                            f"{edit_result['summary']}"
-                        )
-
-                logger.info(f"  {tracker.summary()}")
                 if self.notion and notion_page_id:
                     status = "Review" if edit_result["pass"] else "Drafted"
                     self.notion.update_status(notion_page_id, status)
