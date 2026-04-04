@@ -34,9 +34,16 @@ Key directories:
 
 ### Implemented
 - **Ember API** — global electricity generation, carbon intensity, emissions for ~200 entities (countries, regions, economic groups like OECD/G20/ASEAN)
-- **EIA Open Data API** — US electricity generation by fuel type (national + state level)
+- **EIA Open Data API** — US electricity generation by fuel type (national + state level, all 50 states)
+- **Global Forest Watch** — tree cover loss by country (2000-2024, geostore-based queries)
+- **IUCN Red List v4** — threatened species counts by country and threat category (connector built, awaiting API key)
 - **Mongabay RSS** — 3 feeds (energy, environment, climate-change)
-- **Carbon Brief RSS** — configured in feeds.yaml
+- **Carbon Brief RSS** — climate/energy journalism
+- **PV Magazine RSS** — solar industry news
+- **CleanTechnica RSS** — clean energy news
+- **Utility Dive RSS** — US energy industry
+- **Electrek RSS** — EVs + energy storage
+- **Renew Economy RSS** — Australian clean energy
 
 ### Adding a New Source
 1. Drop a YAML in `config/data_catalog/` describing entities and data types
@@ -45,7 +52,7 @@ Key directories:
 4. The data strategist auto-discovers new catalogs — no prompt changes needed
 
 ### Planned
-- Electricity Maps API, Global Forest Watch, IUCN Red List, NOAA Climate Data
+- Electricity Maps API, NOAA Climate Data
 
 ## Agent Pipeline (per story)
 
@@ -101,6 +108,8 @@ pytest tests/
 | `EIA_API_KEY` | Yes | EIA US electricity data (free — eia.gov/opendata/register.php) |
 | `NOTION_TOKEN` | Optional | Editorial queue in Notion |
 | `WEBSITE_GITHUB_TOKEN` | Optional | Publishes posts to website repo via GitHub API |
+| `GFW_API_KEY` | Optional | Global Forest Watch tree cover loss (globalforestwatch.org) |
+| `IUCN_API_KEY` | Optional | IUCN Red List threatened species (api.iucnredlist.org — applied, awaiting key) |
 | `PIPELINE_MODE` | Optional | `dev` or `local` = route Claude calls through claude CLI; unset = Anthropic API |
 
 ## Publishing Flow
@@ -114,7 +123,7 @@ pytest tests/
 
 ## Current Status
 
-**Phases 1-5 complete. Smart data agent + editor with revision loop operational. 63 tests.**
+**Phases 1-5 complete. Smart data agent + editor with revision loop operational. 78 tests.**
 
 ## Local Scheduling
 
