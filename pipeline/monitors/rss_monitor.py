@@ -36,10 +36,12 @@ class RSSMonitor:
         feeds: list[dict],
         seen_file: Path = SEEN_FILE,
         relevance_keywords: list[str] | None = None,
+        skip_dedup: bool = False,
     ):
         self.feeds = feeds
         self.seen_file = seen_file
-        self.seen: set[str] = self._load_seen()
+        self.skip_dedup = skip_dedup
+        self.seen: set[str] = set() if skip_dedup else self._load_seen()
         self.keywords = [k.lower() for k in (relevance_keywords or [])]
 
     def _load_seen(self) -> set[str]:
@@ -63,7 +65,7 @@ class RSSMonitor:
             except Exception as e:
                 logger.error(f"Failed to parse feed '{feed_cfg.get('name')}': {e}")
                 continue
-        if new_stories:
+        if new_stories and not self.skip_dedup:
             self._save_seen()
         logger.info(f"Found {len(new_stories)} new stories across {len(self.feeds)} feeds")
         return new_stories

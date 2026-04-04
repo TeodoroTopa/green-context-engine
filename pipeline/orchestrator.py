@@ -143,6 +143,9 @@ class Pipeline:
     def run(self, source: str | None = None, max_stories: int = 5) -> list[Path]:
         """Run the full pipeline: discover stories via RSS, enrich, draft, and publish.
 
+        Deduplication uses Notion as the single source of truth — if a story URL
+        already exists in Notion, it is skipped. No local seen-articles file needed.
+
         Args:
             source: Filter to feeds from this source (e.g. "mongabay")
             max_stories: Cap on stories to process per run (saves API calls)
@@ -151,17 +154,30 @@ class Pipeline:
             List of paths to generated draft files.
         """
         feeds, keywords = self._load_feeds(source)
-        monitor = RSSMonitor(feeds, relevance_keywords=keywords)
+        monitor = RSSMonitor(feeds, relevance_keywords=keywords, skip_dedup=True)
         stories = monitor.check_feeds()
-        logger.info(f"Found {len(stories)} new stories")
+        logger.info(f"Found {len(stories)} candidate stories from RSS")
 
         if not stories:
             return []
 
-        stories = stories[:max_stories]
+        # Deduplicate against Notion (single source of truth)
+        new_stories = []
+        for story in stories:
+            if self.notion and self.notion.find_page_by_url(story.url):
+                logger.debug(f"Already in Notion, skipping: {story.title}")
+                continue
+            new_stories.append(story)
+            if len(new_stories) >= max_stories:
+                break
+
+        logger.info(f"{len(new_stories)} new stories after Notion dedup (capped at {max_stories})")
+        if not new_stories:
+            return []
+
         drafts = []
         run_tracker = UsageTracker()
-        for story in stories:
+        for story in new_stories:
             notion_page_id = None
             try:
                 # Queue in Notion
