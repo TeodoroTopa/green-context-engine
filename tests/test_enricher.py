@@ -50,6 +50,50 @@ def test_enrich_uses_strategist_and_fetches_data():
     assert client.messages.create.call_count == 2
 
 
+def test_execute_plan_filters_empty_source_data():
+    """Sources returning empty data should be excluded from results."""
+    client = MagicMock()
+    ember = MagicMock()
+    gfw = MagicMock()
+
+    # Ember returns real data, GFW returns empty
+    ember.get_generation_context.return_value = {
+        "entity": "Germany",
+        "generation": [{"series": "Solar", "generation_twh": 72, "date": "2025"}],
+        "carbon_intensity": [{"emissions_intensity_gco2_per_kwh": 350, "date": "2025"}],
+    }
+    gfw.get_generation_context.return_value = {
+        "entity": "Germany",
+        "tree_cover_loss": [],
+        "source": "gfw",
+    }
+
+    sources = {"ember": ember, "gfw": gfw}
+    enricher = Enricher(sources, client)
+    plan = {
+        "fetches": [
+            {"source": "ember", "entity": "Germany", "role": "primary"},
+            {"source": "gfw", "entity": "Germany", "role": "primary"},
+        ],
+        "reasoning": "Test",
+    }
+    primary, benchmark = enricher._execute_plan(plan)
+    # Ember data included, GFW empty data filtered out
+    assert "Germany" in primary
+    assert primary["Germany"]["generation"][0]["generation_twh"] == 72
+    # GFW returned only metadata + empty list, should be filtered
+    assert len(primary) == 1
+
+
+def test_is_empty_data():
+    """_is_empty_data correctly identifies empty vs non-empty results."""
+    assert Enricher._is_empty_data({}) is True
+    assert Enricher._is_empty_data({"entity": "Germany", "source": "gfw"}) is True
+    assert Enricher._is_empty_data({"entity": "X", "tree_cover_loss": [], "source": "gfw"}) is True
+    assert Enricher._is_empty_data({"entity": "X", "generation": [{"twh": 72}]}) is False
+    assert Enricher._is_empty_data({"entity": "X", "total_assessed": 500}) is False
+
+
 def test_enrich_falls_back_on_strategist_failure():
     """Enricher uses default plan when strategist returns bad JSON."""
     client = MagicMock()

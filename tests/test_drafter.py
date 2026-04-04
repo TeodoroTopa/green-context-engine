@@ -34,13 +34,9 @@ sources:
 status: draft
 ---
 
-## The Hook
+Germany added 10 GW of solar capacity in 2025, pushing the country's solar share to 15% of total generation (Ember). That marks a 20% year-over-year increase.
 
-Germany added 10 GW of solar capacity in 2025.
-
-## The Data Context
-
-Solar now accounts for 15% of Germany's generation mix.
+The shift carries a trade-off: grid stability costs rise with intermittent capacity, but Germany's carbon intensity dropped to 350 gCO2/kWh, well below the EU average of 420 gCO2/kWh (Ember).
 """
 
 
@@ -55,6 +51,28 @@ def test_voice_check_catches_violations():
 
 def test_voice_check_passes_clean_text():
     assert check_voice(CLEAN_DRAFT) == []
+
+
+def test_voice_check_catches_data_gap_language():
+    bad = "No data available for this region. Figures are not yet confirmed."
+    violations = check_voice(bad)
+    assert any("data gap language" in v.lower() for v in violations)
+
+
+def test_prompt_enforces_editorial_rules():
+    """System prompt includes key editorial guardrails."""
+    from pipeline.generation.prompts.energy_brief import SYSTEM_PROMPT
+    assert "300 words" in SYSTEM_PROMPT.lower()
+    assert "NEVER mention missing data" in SYSTEM_PROMPT
+    assert "NO section headers" in SYSTEM_PROMPT
+    assert "PUBLIC-FACING" in SYSTEM_PROMPT
+
+
+def test_voice_check_catches_section_headers():
+    draft = '---\ntitle: "Test"\n---\n\n## The Hook\n\nSome content.\n\n### Details\n\nMore.'
+    violations = check_voice(draft)
+    assert any("section header" in v.lower() for v in violations)
+    assert len([v for v in violations if "section header" in v.lower()]) == 2
 
 
 def test_draft_saves_file(tmp_path):
