@@ -128,30 +128,61 @@ class GFWSource(BaseSource):
 
         return self._fetch_country_loss(entity, iso, start_date)
 
+    def _get_geostore_id(self, iso: str) -> str | None:
+        """Get the GFW geostore ID for a country's administrative boundary."""
+        url = f"{BASE_URL}/geostore/admin/{iso}"
+        key = cache_key(url, {})
+        cached = get_cached(key, self.cache_ttl)
+        if cached is not None:
+            return cached.get("id")
+
+        try:
+            headers = {}
+            if self.api_key:
+                headers["x-api-key"] = self.api_key
+            resp = requests.get(url, headers=headers, timeout=15)
+            resp.raise_for_status()
+            geostore_id = resp.json().get("data", {}).get("id", "")
+            if geostore_id:
+                set_cached(key, {"id": geostore_id})
+            return geostore_id or None
+        except requests.RequestException as e:
+            logger.warning(f"Failed to get geostore for {iso}: {e}")
+            return None
+
     def _fetch_country_loss(self, entity: str, iso: str, start_date: str) -> dict[str, Any]:
-        """Fetch tree cover loss for a country by ISO code."""
-        # The GFW Data API supports SQL-like queries on datasets
+        """Fetch tree cover loss for a country using geostore boundary."""
+        geostore_id = self._get_geostore_id(iso)
+        if not geostore_id:
+            logger.warning(f"No geostore found for {entity} ({iso})")
+            return {"entity": entity, "tree_cover_loss": [], "source": "gfw"}
+
         sql = (
-            f"SELECT umd_tree_cover_loss__year, SUM(umd_tree_cover_loss__ha) as loss_ha "
+            f"SELECT SUM(umd_tree_cover_loss__ha) as loss_ha, "
+            f"umd_tree_cover_loss__year "
             f"FROM data "
-            f"WHERE iso = '{iso}' AND umd_tree_cover_loss__year >= {start_date} "
             f"GROUP BY umd_tree_cover_loss__year "
             f"ORDER BY umd_tree_cover_loss__year DESC"
         )
 
         try:
             raw = self.fetch(
-                f"dataset/{DATASET}/{VERSION}/query/json",
+                f"dataset/{DATASET}/{VERSION}/query",
                 sql=sql,
+                geostore_id=geostore_id,
+                geostore_origin="gfw",
             )
             records = raw.get("data", [])
 
             tree_cover_loss = []
             for r in records:
-                tree_cover_loss.append({
-                    "year": r.get("umd_tree_cover_loss__year"),
-                    "loss_ha": r.get("loss_ha"),
-                })
+                year = r.get("umd_tree_cover_loss__year")
+                loss = r.get("loss_ha")
+                if year and int(year) >= int(start_date):
+                    tree_cover_loss.append({
+                        "year": year,
+                        "loss_ha": loss,
+                    })
 
             return {
                 "entity": entity,

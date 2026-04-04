@@ -44,14 +44,21 @@ def test_fetch_sends_api_key_header(mock_requests, mock_set, mock_get):
 @patch("pipeline.sources.gfw.requests")
 def test_get_generation_context_returns_loss_data(mock_requests, mock_set, mock_get):
     """get_generation_context returns structured tree cover loss for a known country."""
-    mock_resp = MagicMock()
-    mock_resp.json.return_value = {
+    import requests as real_requests
+    mock_requests.RequestException = real_requests.RequestException
+
+    # Two GET calls: geostore lookup, then query
+    geostore_resp = MagicMock()
+    geostore_resp.json.return_value = {"data": {"id": "fake-geostore-id"}}
+
+    query_resp = MagicMock()
+    query_resp.json.return_value = {
         "data": [
             {"umd_tree_cover_loss__year": 2024, "loss_ha": 120000},
             {"umd_tree_cover_loss__year": 2023, "loss_ha": 72000},
         ]
     }
-    mock_requests.get.return_value = mock_resp
+    mock_requests.get.side_effect = [geostore_resp, query_resp]
 
     gfw = GFWSource(api_key="test-key")
     result = gfw.get_generation_context("Indonesia")
