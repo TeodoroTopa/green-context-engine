@@ -10,6 +10,14 @@ FLUFF_PHRASES = [
     "needless to say", "at the end of the day", "in today's world",
 ]
 
+DATA_GAP_PHRASES = [
+    "no data available", "data not available", "not yet publicly",
+    "data gap", "no figures", "not publicly confirmed",
+    "data is limited", "data was not", "information is not available",
+    "figures are not yet", "not yet released", "no real-time",
+    "data limitations", "absence of data", "absence of real-time",
+]
+
 
 def check_voice(draft: str) -> list[str]:
     """Return a list of editorial guideline violations found in the draft."""
@@ -21,4 +29,26 @@ def check_voice(draft: str) -> list[str]:
     for phrase in FLUFF_PHRASES:
         if phrase in lower:
             violations.append(f"Fluff phrase: '{phrase}' — cut it")
+    for phrase in DATA_GAP_PHRASES:
+        if phrase in lower:
+            violations.append(
+                f"Data gap language: '{phrase}' — omit the topic instead of discussing missing data"
+            )
+    # Check for section headers in the body (after frontmatter)
+    body = _extract_body(draft)
+    for line in body.splitlines():
+        if line.startswith("## ") or line.startswith("### "):
+            violations.append(
+                f"Section header found: '{line.strip()}' — write continuous prose, no headers"
+            )
     return violations
+
+
+def _extract_body(draft: str) -> str:
+    """Return the draft body after YAML frontmatter."""
+    if draft.startswith("---"):
+        # Find the closing --- of frontmatter
+        end = draft.find("---", 3)
+        if end != -1:
+            return draft[end + 3:]
+    return draft

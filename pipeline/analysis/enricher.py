@@ -111,6 +111,9 @@ class Enricher:
 
             try:
                 data = source.get_generation_context(entity)
+                if self._is_empty_data(data):
+                    logger.debug(f"Empty data from {source_name}/{entity}, skipping")
+                    continue
                 if role == "primary":
                     primary_data[entity] = data
                 else:
@@ -119,6 +122,23 @@ class Enricher:
                 logger.warning(f"Failed to fetch {source_name}/{entity}: {e}")
 
         return primary_data, benchmark_data
+
+    @staticmethod
+    def _is_empty_data(data: dict) -> bool:
+        """Check if a source returned no meaningful data."""
+        if not data:
+            return True
+        # Check if all list/dict values are empty
+        for key, value in data.items():
+            if key in ("entity", "source"):
+                continue  # metadata fields, not data
+            if isinstance(value, (list, dict)) and len(value) > 0:
+                return False
+            if isinstance(value, (int, float)) and value != 0:
+                return False
+            if isinstance(value, str) and value:
+                return False
+        return True
 
     def _extract_entities_local(self, story: Story) -> list[str]:
         """Extract country/region names using local lookup. No API call."""
@@ -161,7 +181,7 @@ class Enricher:
     def _format_primary_data(self, data: dict) -> str:
         """Format primary entity data for the prompt."""
         if not data:
-            return "No primary data available."
+            return ""
         parts = []
         for entity, context in data.items():
             lines = [f"### {entity} (primary)"]
