@@ -95,7 +95,15 @@ class Enricher:
         )
 
     def _execute_plan(self, plan: dict) -> tuple[dict, dict]:
-        """Execute the strategist's fetch plan, dispatching to the right source."""
+        """Execute the strategist's fetch plan, dispatching to the right source.
+
+        Each fetch can include an optional 'data_types' list to request specific
+        data from a source (e.g., ["tree_cover_loss", "deforestation_drivers"]).
+        If omitted, the source returns all available data for that entity.
+
+        When multiple sources return data for the same entity, results are merged
+        so the drafter sees a combined view (e.g., Ember electricity + GFW forest data).
+        """
         primary_data = {}
         benchmark_data = {}
 
@@ -103,6 +111,7 @@ class Enricher:
             source_name = fetch.get("source", "ember")
             entity = fetch.get("entity", "")
             role = fetch.get("role", "primary")
+            data_types = fetch.get("data_types")  # None = fetch all
 
             source = self.sources.get(source_name)
             if not source:
@@ -110,14 +119,15 @@ class Enricher:
                 continue
 
             try:
-                data = source.get_generation_context(entity)
+                data = source.get_generation_context(entity, data_types=data_types)
                 if self._is_empty_data(data):
                     logger.debug(f"Empty data from {source_name}/{entity}, skipping")
                     continue
-                if role == "primary":
-                    primary_data[entity] = data
+                target = primary_data if role == "primary" else benchmark_data
+                if entity in target:
+                    target[entity].update(data)
                 else:
-                    benchmark_data[entity] = data
+                    target[entity] = data
             except Exception as e:
                 logger.warning(f"Failed to fetch {source_name}/{entity}: {e}")
 
