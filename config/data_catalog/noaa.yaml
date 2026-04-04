@@ -1,0 +1,93 @@
+source: noaa
+description: >
+  NOAA Climate Data Online — monthly temperature and precipitation summaries
+  from the Global Summary of the Month (GSOM) dataset. Covers 180+ countries
+  and all US states via the Global Historical Climatology Network.
+connector: pipeline.sources.noaa.NOAASource
+env_key: NOAA_API_KEY
+
+data_types:
+  - monthly average temperature (TAVG, Celsius)
+  - monthly maximum temperature (TMAX, Celsius)
+  - monthly minimum temperature (TMIN, Celsius)
+  - monthly total precipitation (PRCP, mm)
+
+entities:
+  us_states:
+    - Alabama
+    - Alaska
+    - Arizona
+    - California
+    - Colorado
+    - Florida
+    - Georgia
+    - Hawaii
+    - Idaho
+    - Illinois
+    - Indiana
+    - Iowa
+    - Kansas
+    - Kentucky
+    - Louisiana
+    - Maine
+    - Massachusetts
+    - Michigan
+    - Minnesota
+    - Mississippi
+    - Missouri
+    - Montana
+    - Nebraska
+    - Nevada
+    - New Hampshire
+    - New Jersey
+    - New Mexico
+    - New York
+    - North Carolina
+    - North Dakota
+    - Ohio
+    - Oklahoma
+    - Oregon
+    - Pennsylvania
+    - South Carolina
+    - South Dakota
+    - Tennessee
+    - Texas
+    - Utah
+    - Vermont
+    - Virginia
+    - Washington
+    - West Virginia
+    - Wisconsin
+    - Wyoming
+  countries:
+    major_economies:
+      - United States
+      - China
+      - India
+      - Germany
+      - Japan
+      - United Kingdom
+      - France
+      - Brazil
+      - Canada
+      - Australia
+      - South Korea
+      - Russia
+      - Italy
+      - Spain
+      - Mexico
+    energy_relevant:
+      - Indonesia
+      - Saudi Arabia
+      - Nigeria
+      - South Africa
+      - Colombia
+      - Argentina
+      - Chile
+      - Norway
+      - Sweden
+      - Thailand
+      - Viet Nam
+      - Philippines
+      - Egypt
+      - Kenya
