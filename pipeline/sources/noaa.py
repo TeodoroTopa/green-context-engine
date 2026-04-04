@@ -121,91 +121,189 @@ class NOAASource(BaseSource):
         set_cached(key, data)
         return data
 
+    # Data types the strategist can request selectively
+    AVAILABLE_DATA_TYPES = [
+        "yearly_temperature", "yearly_precipitation",
+        "heating_degree_days", "cooling_degree_days",
+        "monthly_temperature", "monthly_precipitation",
+    ]
+
     def get_generation_context(self, entity: str, **kwargs: Any) -> dict[str, Any]:
         """Get climate data for a country or US state.
 
         Despite the name (inherited from BaseSource), this returns climate
-        data (temperature, precipitation), not electricity generation.
+        data (temperature, precipitation, degree days), not electricity generation.
 
         Args:
             entity: Country name or US state name
-            **kwargs: Optional 'start_date' (YYYY, default: 1 year ago)
+            **kwargs:
+                data_types: Optional list of specific data to fetch. Options:
+                    "yearly_temperature", "yearly_precipitation",
+                    "heating_degree_days", "cooling_degree_days",
+                    "monthly_temperature", "monthly_precipitation"
+                    If None, fetches yearly data + degree days by default.
+                start_date: YYYY string (default: 3 years ago)
 
         Returns:
-            Dict with keys: entity, temperature (list), precipitation (list),
-            source ("noaa")
+            Dict with entity, requested data fields, and source ("noaa").
         """
-        # Determine location ID
         location_id = US_STATE_FIPS.get(entity) or COUNTRY_FIPS.get(entity)
         if not location_id:
             logger.debug(f"NOAA: no FIPS code for '{entity}', skipping")
-            return {"entity": entity, "temperature": [], "precipitation": [], "source": "noaa"}
+            return {"entity": entity, "source": "noaa"}
 
         start_date = kwargs.get("start_date", "")
         if not start_date:
-            # Default: last full year
-            last_year = datetime.now().year - 1
-            start_date = str(last_year)
+            start_date = str(datetime.now().year - 3)
 
-        return self._fetch_climate_summary(entity, location_id, start_date)
+        data_types = kwargs.get("data_types") or [
+            "yearly_temperature", "yearly_precipitation",
+            "heating_degree_days", "cooling_degree_days",
+        ]
 
-    def _fetch_climate_summary(
-        self, entity: str, location_id: str, start_year: str,
+        result = {"entity": entity, "source": "noaa"}
+
+        # Determine which datasets/datatypes to query
+        yearly_types = [t for t in data_types if t.startswith("yearly_") or t.endswith("_degree_days")]
+        monthly_types = [t for t in data_types if t.startswith("monthly_")]
+
+        if yearly_types:
+            yearly = self._fetch_yearly(entity, location_id, start_date, yearly_types)
+            result.update(yearly)
+
+        if monthly_types:
+            monthly = self._fetch_monthly(entity, location_id, start_date, monthly_types)
+            result.update(monthly)
+
+        return result
+
+    def _fetch_yearly(
+        self, entity: str, location_id: str, start_year: str, data_types: list[str],
     ) -> dict[str, Any]:
-        """Fetch monthly temperature and precipitation summaries."""
-        # NOAA monthly data: up to 10-year range
+        """Fetch yearly summaries from GSOY dataset."""
         end_date = f"{datetime.now().year}-01-01"
         start_date = f"{start_year}-01-01"
 
-        temperature = []
-        precipitation = []
+        # Build datatype list based on what's requested
+        noaa_types = []
+        if "yearly_temperature" in data_types:
+            noaa_types.extend(["TAVG", "TMAX", "TMIN"])
+        if "yearly_precipitation" in data_types:
+            noaa_types.append("PRCP")
+        if "heating_degree_days" in data_types:
+            noaa_types.append("HTDD")
+        if "cooling_degree_days" in data_types:
+            noaa_types.append("CLDD")
 
+        if not noaa_types:
+            return {}
+
+        result = {}
         try:
-            # Fetch monthly climate summaries (GSOM dataset)
             raw = self.fetch(
                 "data",
-                datasetid="GSOM",
+                datasetid="GSOY",
                 locationid=location_id,
-                datatypeid="TAVG,TMAX,TMIN,PRCP",
+                datatypeid=",".join(noaa_types),
                 startdate=start_date,
                 enddate=end_date,
                 units="metric",
                 limit=1000,
             )
-            results = raw.get("results", [])
+            aggregated = self._aggregate_stations(raw.get("results", []), yearly=True)
 
-            # GSOM returns per-station readings. Aggregate by month+datatype.
-            from collections import defaultdict
-            buckets = defaultdict(list)  # key: (date, datatype) → [values]
-            for r in results:
-                datatype = r.get("datatype", "")
-                date = r.get("date", "")[:7]  # YYYY-MM
-                value = r.get("value")
-                if value is not None:
-                    # GSOM returns values already in °C (temp) and mm (precip)
-                    # — no /10 conversion needed (unlike GHCND daily data)
-                    buckets[(date, datatype)].append(value)
-
-            for (date, datatype), values in sorted(buckets.items()):
-                avg = sum(values) / len(values)
-                if datatype in ("TAVG", "TMAX", "TMIN"):
-                    temperature.append({
-                        "date": date,
-                        "type": datatype,
-                        "value_celsius": round(avg, 1),
-                    })
-                elif datatype == "PRCP":
-                    precipitation.append({
-                        "date": date,
-                        "value_mm": round(avg, 1),
-                    })
-
+            if "yearly_temperature" in data_types:
+                result["yearly_temperature"] = [
+                    {"year": k[0], "type": k[1], "value_celsius": v}
+                    for k, v in aggregated.items() if k[1] in ("TAVG", "TMAX", "TMIN")
+                ]
+            if "yearly_precipitation" in data_types:
+                result["yearly_precipitation"] = [
+                    {"year": k[0], "total_mm": v}
+                    for k, v in aggregated.items() if k[1] == "PRCP"
+                ]
+            if "heating_degree_days" in data_types:
+                result["heating_degree_days"] = [
+                    {"year": k[0], "value": v}
+                    for k, v in aggregated.items() if k[1] == "HTDD"
+                ]
+            if "cooling_degree_days" in data_types:
+                result["cooling_degree_days"] = [
+                    {"year": k[0], "value": v}
+                    for k, v in aggregated.items() if k[1] == "CLDD"
+                ]
         except requests.RequestException as e:
-            logger.warning(f"Failed to fetch NOAA data for {entity}: {e}")
+            logger.warning(f"Failed to fetch NOAA yearly data for {entity}: {e}")
+
+        return result
+
+    def _fetch_monthly(
+        self, entity: str, location_id: str, start_year: str, data_types: list[str],
+    ) -> dict[str, Any]:
+        """Fetch monthly summaries from GSOM dataset."""
+        end_date = f"{datetime.now().year}-01-01"
+        start_date = f"{start_year}-01-01"
+
+        noaa_types = []
+        if "monthly_temperature" in data_types:
+            noaa_types.extend(["TAVG", "TMAX", "TMIN"])
+        if "monthly_precipitation" in data_types:
+            noaa_types.append("PRCP")
+
+        if not noaa_types:
+            return {}
+
+        result = {}
+        try:
+            raw = self.fetch(
+                "data",
+                datasetid="GSOM",
+                locationid=location_id,
+                datatypeid=",".join(noaa_types),
+                startdate=start_date,
+                enddate=end_date,
+                units="metric",
+                limit=1000,
+            )
+            aggregated = self._aggregate_stations(raw.get("results", []), yearly=False)
+
+            if "monthly_temperature" in data_types:
+                result["temperature"] = [
+                    {"date": k[0], "type": k[1], "value_celsius": v}
+                    for k, v in aggregated.items() if k[1] in ("TAVG", "TMAX", "TMIN")
+                ]
+            if "monthly_precipitation" in data_types:
+                result["precipitation"] = [
+                    {"date": k[0], "value_mm": v}
+                    for k, v in aggregated.items() if k[1] == "PRCP"
+                ]
+        except requests.RequestException as e:
+            logger.warning(f"Failed to fetch NOAA monthly data for {entity}: {e}")
+
+        return result
+
+    @staticmethod
+    def _aggregate_stations(results: list[dict], yearly: bool = False) -> dict:
+        """Average per-station readings into one value per time period + datatype.
+
+        Args:
+            results: Raw NOAA API results (per-station records).
+            yearly: If True, truncate date to year; otherwise to YYYY-MM.
+
+        Returns:
+            Dict of (date, datatype) → rounded average value.
+        """
+        from collections import defaultdict
+        buckets = defaultdict(list)
+        for r in results:
+            datatype = r.get("datatype", "")
+            raw_date = r.get("date", "")
+            date = raw_date[:4] if yearly else raw_date[:7]
+            value = r.get("value")
+            if value is not None:
+                buckets[(date, datatype)].append(value)
 
         return {
-            "entity": entity,
-            "temperature": temperature,
-            "precipitation": precipitation,
-            "source": "noaa",
+            k: round(sum(v) / len(v), 1)
+            for k, v in sorted(buckets.items())
         }
