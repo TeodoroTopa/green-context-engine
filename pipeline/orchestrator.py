@@ -14,6 +14,7 @@ import yaml
 from anthropic import Anthropic
 from dotenv import load_dotenv
 
+from pipeline.analysis.article_selector import select_best_stories
 from pipeline.analysis.enricher import Enricher
 from pipeline.claude_code_client import ClaudeCodeClient
 from pipeline.generation.drafter import Drafter
@@ -163,15 +164,23 @@ class Pipeline:
                 logger.debug(f"Already in Notion, skipping: {story.title}")
                 continue
             new_stories.append(story)
-            if len(new_stories) >= max_stories:
-                break
 
-        logger.info(f"{len(new_stories)} new stories after Notion dedup (capped at {max_stories})")
+        logger.info(f"{len(new_stories)} new stories after Notion dedup")
         if not new_stories:
             return []
 
-        drafts = []
+        # Select best stories based on data fit (if more candidates than needed)
         run_tracker = UsageTracker()
+        if len(new_stories) > max_stories:
+            new_stories = select_best_stories(
+                self.client, self.enricher.model,
+                new_stories, self.enricher._catalog_text,
+                max_stories, run_tracker,
+            )
+        else:
+            new_stories = new_stories[:max_stories]
+
+        drafts = []
         for story in new_stories:
             notion_page_id = None
             try:
