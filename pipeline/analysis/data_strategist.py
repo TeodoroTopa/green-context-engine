@@ -34,7 +34,11 @@ Rules:
   * GFW: tree cover loss, deforestation drivers (WHY forests are lost), carbon emissions
   * NOAA: temperature trends, precipitation, heating/cooling degree days (energy demand)
   * IUCN: threatened species if biodiversity angle exists
-  * EIA: US-specific electricity data (only for US stories)
+  * EIA: US-specific electricity generation by fuel type (only for US stories).
+    IMPORTANT: For stories about a specific US city or location, map it to the
+    corresponding US state. Examples: Port of Los Angeles → EIA California,
+    Texas grid → EIA Texas, NYC heat wave → EIA New York. State-level data
+    is far more relevant than national for local stories.
   * Electricity Maps: real-time carbon intensity (if key configured)
 - Always include Ember World as a global baseline.
 - EIA only covers the US — don't request non-US entities from EIA.

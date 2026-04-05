@@ -117,26 +117,114 @@ def test_format_primary_data_includes_gfw():
     assert "Indonesia" in result
 
 
-def test_format_primary_data_mixed_ember_gfw():
-    """_format_primary_data handles both Ember and GFW data for same entity."""
+def test_format_ember_generation():
+    """Ember generation data formats correctly (date, series, generation_twh)."""
     client = MagicMock()
-    sources = {"ember": MagicMock()}
-    enricher = Enricher(sources, client)
-
+    enricher = Enricher({}, client)
     data = {
         "Indonesia": {
-            "entity": "Indonesia",
-            "generation": [{"series": "Coal", "generation_twh": 228, "date": "2024"}],
-            "carbon_intensity": [{"emissions_intensity_gco2_per_kwh": 680, "date": "2024"}],
-            "tree_cover_loss": [{"year": 2024, "loss_ha": 1310626.0}],
+            "entity": "Indonesia", "source": "ember",
+            "generation": [
+                {"date": "2024", "series": "Coal", "generation_twh": 228.43},
+                {"date": "2024", "series": "Solar", "generation_twh": 5.2},
+            ],
+            "carbon_intensity": [{"date": "2024", "emissions_intensity_gco2_per_kwh": 680}],
         }
     }
     result = enricher._format_primary_data(data)
-    assert "Generation mix" in result
-    assert "Carbon intensity" in result
-    assert "Tree cover loss" in result
-    assert "Coal" in result
-    assert "1,310,626" in result
+    assert "Ember" in result
+    assert "Coal: 228.43 TWh" in result
+    assert "Solar: 5.2 TWh" in result
+    assert "680 gCO2/kWh" in result
+
+
+def test_format_eia_generation():
+    """EIA generation data formats correctly with whitelist filtering and percentages."""
+    client = MagicMock()
+    enricher = Enricher({}, client)
+    data = {
+        "California": {
+            "entity": "California", "source": "eia",
+            "generation": [
+                {"period": "2025", "fuel_type": "ALL", "fuel_description": "all fuels", "value": "205884", "unit": "thousand MWh"},
+                {"period": "2025", "fuel_type": "NG", "fuel_description": "natural gas", "value": "73326", "unit": "thousand MWh"},
+                {"period": "2025", "fuel_type": "SUN", "fuel_description": "solar", "value": "55574", "unit": "thousand MWh"},
+                {"period": "2025", "fuel_type": "DPV", "fuel_description": "small scale solar", "value": "34529", "unit": "thousand MWh"},
+                {"period": "2025", "fuel_type": "NUC", "fuel_description": "nuclear", "value": "17558", "unit": "thousand MWh"},
+                {"period": "2025", "fuel_type": "AOR", "fuel_description": "all renewables", "value": "87015", "unit": "thousand MWh"},
+            ],
+        }
+    }
+    result = enricher._format_primary_data(data)
+    assert "EIA" in result
+    assert "natural gas: 73.3 TWh (36%)" in result
+    assert "utility-scale solar: 55.6 TWh (27%)" in result
+    assert "rooftop/small-scale solar: 34.5 TWh (17%)" in result
+    assert "nuclear: 17.6 TWh" in result
+    assert "all renewables" not in result  # aggregate filtered out
+    assert "all fuels" not in result  # aggregate filtered out
+    assert "?: ? TWh" not in result  # the old broken format must NOT appear
+
+
+def test_format_gfw_all_fields():
+    """GFW data formats tree cover loss, drivers, and carbon emissions."""
+    client = MagicMock()
+    enricher = Enricher({}, client)
+    data = {
+        "Indonesia": {
+            "entity": "Indonesia", "source": "gfw",
+            "tree_cover_loss": [{"year": 2024, "loss_ha": 1310626.0}],
+            "deforestation_drivers": {"Commodity driven deforestation": 57.4, "Forestry": 23.6},
+            "carbon_emissions": [{"year": 2024, "co2e_tonnes": 685008830.0}],
+        }
+    }
+    result = enricher._format_primary_data(data)
+    assert "1,310,626 hectares" in result
+    assert "Commodity driven deforestation: 57.4%" in result
+    assert "685.0 million tonnes CO2e" in result
+
+
+def test_format_noaa_all_fields():
+    """NOAA data formats yearly temp, precip, and degree days."""
+    client = MagicMock()
+    enricher = Enricher({}, client)
+    data = {
+        "California": {
+            "entity": "California", "source": "noaa",
+            "yearly_temperature": [{"year": "2023", "type": "TAVG", "value_celsius": 15.5}],
+            "yearly_precipitation": [{"year": "2023", "total_mm": 843.4}],
+            "heating_degree_days": [{"year": "2023", "value": 1842.8}],
+            "cooling_degree_days": [{"year": "2023", "value": 685.4}],
+        }
+    }
+    result = enricher._format_primary_data(data)
+    assert "15.5°C" in result
+    assert "843.4 mm" in result
+    assert "1842.8" in result
+    assert "685.4" in result
+
+
+def test_format_merged_ember_gfw_eia():
+    """Merged data from multiple sources for the same entity formats all fields."""
+    client = MagicMock()
+    enricher = Enricher({}, client)
+    # Simulate Ember + GFW merged for Indonesia
+    data = {
+        "Indonesia": {
+            "entity": "Indonesia", "source": "gfw",  # last source to merge wins
+            "generation": [{"date": "2024", "series": "Coal", "generation_twh": 228}],
+            "carbon_intensity": [{"date": "2024", "emissions_intensity_gco2_per_kwh": 680}],
+            "tree_cover_loss": [{"year": 2024, "loss_ha": 1310626.0}],
+            "deforestation_drivers": {"Commodity driven deforestation": 57.4},
+        }
+    }
+    result = enricher._format_primary_data(data)
+    # Ember fields present (source=gfw but generation fields are Ember-style)
+    assert "Coal: 228 TWh" in result
+    assert "680 gCO2/kWh" in result
+    # GFW fields present
+    assert "1,310,626 hectares" in result
+    assert "57.4%" in result
 
 
 def test_enrich_falls_back_on_strategist_failure():

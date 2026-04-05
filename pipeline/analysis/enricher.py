@@ -23,6 +23,68 @@ logger = logging.getLogger(__name__)
 
 COUNTRIES_FILE = Path("data/reference/countries.json")
 
+# Non-overlapping EIA fuel types to display, with clean names for the writing agent.
+# EIA has dozens of overlapping codes (ALL, AOR, COW, FOS, REN, TSN, etc.).
+# This whitelist picks one code per real fuel category to avoid double-counting.
+_EIA_FUEL_DISPLAY = {
+    "NG":  "natural gas",
+    "SUN": "utility-scale solar",
+    "DPV": "rooftop/small-scale solar",
+    "NUC": "nuclear",
+    "WND": "wind",
+    "HYC": "hydroelectric",
+    "GEO": "geothermal",
+    "BIO": "biomass",
+    "COL": "coal",
+    "DFO": "oil",
+    "OOG": "other gases",
+}
+
+
+def _format_ember_generation(gen: list[dict]) -> list[str]:
+    """Format Ember-style generation data (date, series, generation_twh)."""
+    if not gen:
+        return []
+    latest_year = max(r.get("date", "") for r in gen)
+    latest = [r for r in gen if r.get("date") == latest_year]
+    lines = [f"Electricity generation mix ({latest_year}, Ember):"]
+    for r in sorted(latest, key=lambda x: x.get("generation_twh", 0), reverse=True):
+        lines.append(f"  {r.get('series', '?')}: {r.get('generation_twh', '?')} TWh")
+    return lines
+
+
+def _format_eia_generation(gen: list[dict]) -> list[str]:
+    """Format EIA-style generation data (period, fuel_description, value in thousand MWh).
+
+    Uses a whitelist of non-overlapping fuel types to avoid double-counting.
+    Converts thousand MWh to TWh for consistency with Ember formatting.
+    Shows percentage of total generation alongside TWh.
+    """
+    if not gen:
+        return []
+    latest_year = max(r.get("period", "") for r in gen)
+    latest = [r for r in gen if r.get("period") == latest_year]
+
+    # Get total for percentage calculation
+    total_rec = next((r for r in latest if r.get("fuel_type") == "ALL"), None)
+    total_twh = float(total_rec["value"]) / 1000 if total_rec else 0
+
+    # Filter to whitelisted fuel types only
+    display = [r for r in latest if r.get("fuel_type") in _EIA_FUEL_DISPLAY]
+    if not display:
+        return []
+
+    lines = [f"Electricity generation mix ({latest_year}, EIA):"]
+    for r in sorted(display, key=lambda x: float(x.get("value", 0) or 0), reverse=True):
+        val = float(r.get("value", 0) or 0)
+        twh = val / 1000
+        if twh < 0.1:
+            continue
+        name = _EIA_FUEL_DISPLAY.get(r["fuel_type"], r.get("fuel_description", "?"))
+        pct = f" ({twh / total_twh * 100:.0f}%)" if total_twh > 0 else ""
+        lines.append(f"  {name}: {twh:.1f} TWh{pct}")
+    return lines
+
 
 @dataclass
 class EnrichedStory:
@@ -41,7 +103,7 @@ class EnrichedStory:
 class Enricher:
     """Enriches stories with energy data using AI-driven data selection."""
 
-    def __init__(self, sources: dict[str, BaseSource], client, model: str = "claude-sonnet-4-6"):
+    def __init__(self, sources: dict[str, BaseSource], client, model: str = "claude-opus-4-6"):
         self.sources = sources  # {"ember": EmberSource, "eia": EIASource, ...}
         self.client = client
         self.model = model
@@ -198,11 +260,11 @@ class Enricher:
             lines = [f"### {entity} (primary)"]
             gen = context.get("generation", [])
             if gen:
-                latest_year = max(r.get("date") or r.get("period", "") for r in gen)
-                latest = [r for r in gen if (r.get("date") or r.get("period", "")) == latest_year]
-                lines.append(f"Generation mix ({latest_year}):")
-                for r in sorted(latest, key=lambda x: x.get("generation_twh", 0), reverse=True):
-                    lines.append(f"  {r.get('series', '?')}: {r.get('generation_twh', '?')} TWh")
+                source_id = context.get("source", "")
+                if source_id == "eia":
+                    lines.extend(_format_eia_generation(gen))
+                else:
+                    lines.extend(_format_ember_generation(gen))
 
             carbon = context.get("carbon_intensity", [])
             if carbon:
@@ -308,14 +370,18 @@ class Enricher:
                 latest_c = max(carbon, key=lambda x: x["date"])
                 ci = latest_c.get("emissions_intensity_gco2_per_kwh", "?")
                 lines.append(f"  {entity}: {ci} gCO2/kWh ({latest_c['date']})")
-            # Also show generation if available (useful for comparing scale)
             gen = context.get("generation", [])
             if gen:
-                latest_year = max(r.get("date") or r.get("period", "") for r in gen)
-                total = sum(
-                    r.get("generation_twh", 0) for r in gen
-                    if (r.get("date") or r.get("period", "")) == latest_year and isinstance(r.get("generation_twh"), (int, float))
-                )
-                if total > 0:
-                    lines.append(f"  {entity} total generation ({latest_year}): {total:.0f} TWh")
+                source_id = context.get("source", "")
+                if source_id == "eia":
+                    lines.extend(f"  {l}" for l in _format_eia_generation(gen))
+                else:
+                    # Ember: show total generation for benchmarks
+                    latest_year = max(r.get("date", "") for r in gen)
+                    total = sum(
+                        r.get("generation_twh", 0) for r in gen
+                        if r.get("date") == latest_year and isinstance(r.get("generation_twh"), (int, float))
+                    )
+                    if total > 0:
+                        lines.append(f"  {entity} total generation ({latest_year}): {total:.0f} TWh")
         return "\n".join(lines)

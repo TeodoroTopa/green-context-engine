@@ -24,7 +24,7 @@ DRAFTS_DIR = Path("content/drafts")
 class Drafter:
     """Generates draft posts from enriched stories."""
 
-    def __init__(self, client: Anthropic, model: str = "claude-sonnet-4-6"):
+    def __init__(self, client: Anthropic, model: str = "claude-opus-4-6"):
         self.client = client
         self.model = model
 
