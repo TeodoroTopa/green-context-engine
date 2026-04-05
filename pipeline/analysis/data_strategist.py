@@ -15,35 +15,11 @@ from pipeline.usage import UsageTracker
 logger = logging.getLogger(__name__)
 
 STRATEGIST_PROMPT = """\
-You are a data strategist for an energy intelligence pipeline. Your job is to
-decide what data to fetch from MULTIPLE sources to enable cross-domain synthesis.
+Pick what data to fetch for this story. Always use 2+ sources for cross-domain synthesis.
 
-The pipeline's core value is connecting disparate data: energy grids + deforestation,
-electricity mix + biodiversity, US state data + global benchmarks. Single-source
-analysis is not enough — always pull from multiple sources to create a richer picture.
+<examples>
 
-Rules:
-- ALWAYS fetch from at least 2 different sources. This is mandatory.
-- Pick 1-3 PRIMARY entities — the countries/regions the story is about.
-- Pick 2-4 BENCHMARK entities — comparison groups from relevant sources.
-- For each fetch, you can optionally specify "data_types" — a list of specific
-  data to request from that source. Check the catalog for available data_types
-  per source. If omitted, the source returns all available data.
-- For any story with a geographic location:
-  * Ember: electricity generation, carbon intensity, emissions (always relevant)
-  * GFW: tree cover loss, deforestation drivers (WHY forests are lost), carbon emissions
-  * NOAA: temperature trends, precipitation, heating/cooling degree days (energy demand)
-  * IUCN: threatened species if biodiversity angle exists
-  * EIA: US-specific electricity generation by fuel type (only for US stories).
-    IMPORTANT: For stories about a specific US city or location, map it to the
-    corresponding US state. Examples: Port of Los Angeles → EIA California,
-    Texas grid → EIA Texas, NYC heat wave → EIA New York. State-level data
-    is far more relevant than national for local stories.
-- Always include Ember World as a global baseline.
-- EIA only covers the US — don't request non-US entities from EIA.
-- Only request entities that exist in the catalog for that source.
-
-Example — Indonesia deforestation story:
+Indonesia deforestation story:
 {{
   "fetches": [
     {{"source": "ember", "entity": "Indonesia", "role": "primary"}},
@@ -55,29 +31,38 @@ Example — Indonesia deforestation story:
   "reasoning": "Ember for grid carbon intensity + GFW for deforestation rates and drivers. Compare to ASEAN/World on energy, Brazil on deforestation."
 }}
 
-Example — US heat wave + energy demand story:
+US Port of LA electrification story:
 {{
   "fetches": [
     {{"source": "ember", "entity": "United States", "role": "primary"}},
-    {{"source": "noaa", "entity": "Texas", "role": "primary", "data_types": ["yearly_temperature", "cooling_degree_days"]}},
-    {{"source": "eia", "entity": "Texas", "role": "primary"}},
+    {{"source": "eia", "entity": "California", "role": "primary"}},
+    {{"source": "noaa", "entity": "California", "role": "primary", "data_types": ["cooling_degree_days"]}},
     {{"source": "ember", "entity": "World", "role": "benchmark"}}
   ],
-  "reasoning": "EIA for Texas grid mix, NOAA for temperature + cooling demand, Ember for US/global comparison."
+  "reasoning": "EIA for California grid mix (the grid these trucks charge on), NOAA for cooling demand, Ember for US/global comparison."
 }}
 
-Return JSON only:
-{{
-  "fetches": [...],
-  "reasoning": "Explain the cross-source synthesis angle"
-}}
+</examples>
 
-## Story
+<rules>
+- 2+ different sources per story (mandatory).
+- 1-3 primary entities (the story's subjects), 2-4 benchmarks (comparisons).
+- Use "data_types" to request specific data when you don't need everything from a source.
+- Always include Ember World as a global baseline.
+- EIA is US-only. Map US cities to their state: Port of LA → California, NYC → New York.
+- Only request entities listed in the catalog below.
+</rules>
+
+Return JSON only: {{"fetches": [...], "reasoning": "..."}}
+
+<story>
 Title: {title}
 Summary: {summary}
+</story>
 
-## Available Data Sources
+<catalog>
 {catalog}
+</catalog>
 """
 
 

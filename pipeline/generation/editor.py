@@ -16,70 +16,43 @@ from pipeline.usage import UsageTracker
 logger = logging.getLogger(__name__)
 
 EDITOR_PROMPT = """\
-You are a rigorous fact-checking editor for energy intelligence briefs.
+Fact-check this draft against the source material. Every claim must trace to
+the Story or Data below.
 
-You have TWO inputs:
-1. The DRAFT — what the writer produced
-2. The SOURCE MATERIAL — the story and data the writer was given
+<checks>
+CRITICAL — flag these:
+- Any factual claim not in the Story or Data
+- Any distortion (e.g., "multi-year decline" when data shows mixed trend)
+- Data year ≠ story year without explicit label
 
-Your job: verify every claim in the draft against the source material.
+HIGH — flag these:
+- Trend words ("reversing," "first time," "steady") not supported by the data
+- Numbers that can't be traced to source data or a labeled calculation
 
-## Checks (in order of severity)
-
-### 1. Claim Verification (CRITICAL)
-Every factual statement must trace to either the Story or the Data.
-- If a claim doesn't appear in either source, flag it.
-- If a claim oversimplifies a source (e.g., "multi-year decline" when the source
-  says "decline 2017-2021, then moderate increases"), flag it as a distortion.
-
-### 2. Temporal Accuracy (CRITICAL)
-- If the data year differs from the story year, the draft MUST state this explicitly.
-  Example: "Ember data from 2024 shows..." when the story event is from 2025.
-- Flag any phrasing that implies data and story events are contemporaneous when they're not.
-
-### 3. Trend Accuracy (HIGH)
-- Words like "snapping," "reversing," "first time," "steady" make specific claims
-  about patterns. Verify each against what the story actually says.
-- An oversimplification that changes the meaning is an error, not a style choice.
-
-### 4. Numerical Accuracy (HIGH)
-- Every number in the draft must appear in the source data OR be a clearly labeled
-  calculation from source numbers (e.g., "44% above" derived from 680 vs 471).
-- Flag any number that can't be traced.
-
-### 5. Editorial Quality (MEDIUM)
-- No lazy adjectives without evidence
-- No fluff phrases
-- Active voice
-- YAML frontmatter present with title, date, sources
-
-## Return Format
+MEDIUM — flag these:
+- Lazy adjectives without evidence, fluff phrases, missing frontmatter
+</checks>
 
 Return JSON only:
 {{
   "pass": true/false,
-  "errors": [
-    {{"severity": "critical|high|medium", "claim": "quoted text from draft",
-      "issue": "what's wrong", "fix": "suggested correction"}}
-  ],
+  "errors": [{{"severity": "critical|high|medium", "claim": "...", "issue": "...", "fix": "..."}}],
   "summary": "1-2 sentence assessment"
 }}
 
-PASS = zero critical errors, zero high errors, and no more than 2 medium errors.
+PASS = zero critical, zero high, ≤2 medium.
 
-## Source Material
-
-### Story
-Title: {story_title}
-Source: {story_source}
+<source_material>
+Story: {story_title} ({story_source})
 Summary: {story_summary}
 
-### Data Provided to Writer
+Data provided to writer:
 {data_text}
+</source_material>
 
-## Draft to Review
-
+<draft>
 {draft_text}
+</draft>
 """
 
 

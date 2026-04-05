@@ -230,14 +230,13 @@ class Enricher:
             messages=[{
                 "role": "user",
                 "content": (
-                    "You are an energy and environmental data analyst. Given this news story "
-                    "and the data from multiple sources (electricity, forest cover, climate, biodiversity), "
-                    "provide:\n"
-                    "1. A brief summary of what the data shows (2-3 sentences)\n"
-                    "2. 2-3 suggested angles for an energy intelligence brief\n\n"
-                    "Return JSON: {\"summary\": \"...\", \"angles\": [\"...\", \"...\"]}\n\n"
-                    f"## Story\nTitle: {story.title}\nSummary: {story.summary}\n\n"
-                    f"## Data\n{data_text}"
+                    "Given this story and data, return JSON with:\n"
+                    "1. \"summary\": what the data shows in context of the story (2-3 sentences)\n"
+                    "2. \"angles\": 2-3 angles for a brief that connects the story to the data\n\n"
+                    "Focus on cross-source connections — what insight emerges from combining "
+                    "different data sources that neither provides alone?\n\n"
+                    f"<story>\n{story.title}\n{story.summary}\n</story>\n\n"
+                    f"<data>\n{data_text}\n</data>"
                 ),
             }],
         )
