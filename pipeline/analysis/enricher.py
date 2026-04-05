@@ -159,39 +159,47 @@ class Enricher:
     def _execute_plan(self, plan: dict) -> tuple[dict, dict]:
         """Execute the strategist's fetch plan, dispatching to the right source.
 
-        Each fetch can include an optional 'data_types' list to request specific
-        data from a source (e.g., ["tree_cover_loss", "deforestation_drivers"]).
-        If omitted, the source returns all available data for that entity.
-
-        When multiple sources return data for the same entity, results are merged
-        so the drafter sees a combined view (e.g., Ember electricity + GFW forest data).
+        Fetches run in parallel (ThreadPoolExecutor) since each is an independent
+        API call. When multiple sources return data for the same entity, results
+        are merged so the drafter sees a combined view.
         """
+        from concurrent.futures import ThreadPoolExecutor, as_completed
+
         primary_data = {}
         benchmark_data = {}
 
-        for fetch in plan.get("fetches", []):
+        def _fetch_one(fetch: dict):
             source_name = fetch.get("source", "ember")
             entity = fetch.get("entity", "")
             role = fetch.get("role", "primary")
-            data_types = fetch.get("data_types")  # None = fetch all
+            data_types = fetch.get("data_types")
 
             source = self.sources.get(source_name)
             if not source:
                 logger.warning(f"Source '{source_name}' not available, skipping {entity}")
-                continue
-
+                return None
             try:
                 data = source.get_generation_context(entity, data_types=data_types)
                 if self._is_empty_data(data):
                     logger.debug(f"Empty data from {source_name}/{entity}, skipping")
-                    continue
-                target = primary_data if role == "primary" else benchmark_data
-                if entity in target:
-                    target[entity].update(data)
-                else:
-                    target[entity] = data
+                    return None
+                return (entity, role, data)
             except Exception as e:
                 logger.warning(f"Failed to fetch {source_name}/{entity}: {e}")
+                return None
+
+        fetches = plan.get("fetches", [])
+        with ThreadPoolExecutor(max_workers=6) as pool:
+            futures = {pool.submit(_fetch_one, f): f for f in fetches}
+            for future in as_completed(futures):
+                result = future.result()
+                if result:
+                    entity, role, data = result
+                    target = primary_data if role == "primary" else benchmark_data
+                    if entity in target:
+                        target[entity].update(data)
+                    else:
+                        target[entity] = data
 
         return primary_data, benchmark_data
 
