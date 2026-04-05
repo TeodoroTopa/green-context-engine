@@ -22,16 +22,15 @@ def _mock_response(text: str) -> MagicMock:
 
 
 def test_enrich_uses_strategist_and_fetches_data():
-    """Enricher calls strategist, fetches from sources, and analyzes."""
+    """Enricher calls strategist and fetches from sources (no separate analyzer)."""
     client = MagicMock()
     ember = MagicMock()
 
-    # Call 1: strategist returns fetch plan
-    # Call 2: analysis returns summary + angles
-    client.messages.create.side_effect = [
-        _mock_response('{"fetches": [{"source": "ember", "entity": "Germany", "role": "primary"}, {"source": "ember", "entity": "World", "role": "benchmark"}], "reasoning": "Compare to global"}'),
-        _mock_response('{"summary": "Germany solar growing fast.", "angles": ["Record capacity"]}'),
-    ]
+    # Only 1 Claude call: strategist returns fetch plan (analyzer removed)
+    client.messages.create.return_value = _mock_response(
+        '{"fetches": [{"source": "ember", "entity": "Germany", "role": "primary"}, '
+        '{"source": "ember", "entity": "World", "role": "benchmark"}], "reasoning": "Compare to global"}'
+    )
     ember.get_generation_context.return_value = {
         "entity": "Germany",
         "generation": [{"series": "Solar", "generation_twh": 72, "date": "2025"}],
@@ -46,8 +45,8 @@ def test_enrich_uses_strategist_and_fetches_data():
     assert "Germany" in result.ember_data
     assert "World" in result.benchmark_data
     assert result.fetch_plan["reasoning"] == "Compare to global"
-    # 2 Claude calls: strategist + analysis
-    assert client.messages.create.call_count == 2
+    # 1 Claude call: strategist only (analyzer eliminated)
+    assert client.messages.create.call_count == 1
 
 
 def test_execute_plan_filters_empty_source_data():
@@ -232,10 +231,8 @@ def test_enrich_falls_back_on_strategist_failure():
     client = MagicMock()
     ember = MagicMock()
 
-    client.messages.create.side_effect = [
-        _mock_response("not valid json"),  # strategist fails
-        _mock_response('{"summary": "World data.", "angles": ["Global trends"]}'),
-    ]
+    # Only 1 Claude call: strategist (fails, triggers fallback). No analyzer.
+    client.messages.create.return_value = _mock_response("not valid json")
     ember.get_generation_context.return_value = {
         "entity": "World",
         "generation": [{"series": "Total", "generation_twh": 29000, "date": "2024"}],

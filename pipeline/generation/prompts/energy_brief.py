@@ -57,7 +57,6 @@ def build_draft_prompt(enriched) -> str:
     Args:
         enriched: An EnrichedStory instance.
     """
-    angles_text = "\n".join(f"- {a}" for a in enriched.suggested_angles)
     source_name = enriched.story.source.capitalize() if enriched.story.source else "Source"
 
     return f"""\
@@ -70,10 +69,6 @@ Summary: {enriched.story.summary}
 <data>
 {enriched.data_summary}
 </data>
-
-<angles>
-{angles_text}
-</angles>
 
 Write the brief (250 words max). Start with YAML frontmatter:
 

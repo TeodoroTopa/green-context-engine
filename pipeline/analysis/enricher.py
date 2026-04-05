@@ -132,7 +132,7 @@ class Enricher:
         if not entities:
             entities = self._extract_entities_local(story) or ["World"]
 
-        # 4. Format data and analyze
+        # 4. Format data (drafter interprets it directly — no separate analyzer call)
         data_text = ""
         if primary_data:
             data_text = self._format_primary_data(primary_data)
@@ -140,17 +140,13 @@ class Enricher:
                 data_text += "\n\n" + self._format_benchmark_data(
                     benchmark_data, fetch_plan.get("reasoning", "")
                 )
-            data_summary, angles = self._analyze(story, data_text, tracker)
-        else:
-            data_summary = ""
-            angles = []
 
         return EnrichedStory(
             story=story,
             entities=entities,
             ember_data=primary_data,
-            data_summary=data_summary,
-            suggested_angles=angles,
+            data_summary=data_text,
+            suggested_angles=[],
             fetch_plan=fetch_plan,
             benchmark_data=benchmark_data,
             data_text=data_text,
