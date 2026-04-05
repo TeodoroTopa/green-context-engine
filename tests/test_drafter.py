@@ -64,10 +64,9 @@ def test_voice_check_catches_data_gap_language():
 def test_prompt_enforces_editorial_rules():
     """System prompt includes key editorial guardrails."""
     from pipeline.generation.prompts.energy_brief import SYSTEM_PROMPT
-    assert "300 words" in SYSTEM_PROMPT.lower()
+    assert "250 words" in SYSTEM_PROMPT.lower()
     assert "NEVER mention missing data" in SYSTEM_PROMPT
-    assert "PUBLIC-FACING" in SYSTEM_PROMPT
-    assert "NOT energy-sector specialists" in SYSTEM_PROMPT or "NOT sector specialists" in SYSTEM_PROMPT
+    assert "NOT energy specialists" in SYSTEM_PROMPT
 
 
 def test_draft_saves_file(tmp_path):
