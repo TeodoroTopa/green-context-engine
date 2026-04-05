@@ -346,16 +346,6 @@ class Enricher:
                 for r in precip[:6]:
                     lines.append(f"  {r['date']}: {r['value_mm']} mm")
 
-            # Electricity Maps: real-time data
-            ci_rt = context.get("carbon_intensity_realtime")
-            if ci_rt is not None:
-                lines.append(f"Real-time carbon intensity (Electricity Maps): {ci_rt} gCO2eq/kWh")
-            breakdown = context.get("power_breakdown", {})
-            if breakdown:
-                lines.append("Power mix, real-time (Electricity Maps):")
-                for src, mw in sorted(breakdown.items(), key=lambda x: x[1], reverse=True):
-                    lines.append(f"  {src}: {mw} MW")
-
             parts.append("\n".join(lines))
         return "\n\n".join(parts)
 

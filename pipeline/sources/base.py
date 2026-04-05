@@ -5,7 +5,7 @@ from typing import Any
 class BaseSource(ABC):
     """Base class for all data source connectors.
 
-    Every source (Ember, EIA, Electricity Maps, etc.) implements this interface
+    Every source (Ember, EIA, GFW, etc.) implements this interface
     so the rest of the pipeline can work with any source uniformly.
     """
 

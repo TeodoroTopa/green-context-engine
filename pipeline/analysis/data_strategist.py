@@ -39,7 +39,6 @@ Rules:
     corresponding US state. Examples: Port of Los Angeles → EIA California,
     Texas grid → EIA Texas, NYC heat wave → EIA New York. State-level data
     is far more relevant than national for local stories.
-  * Electricity Maps: real-time carbon intensity (if key configured)
 - Always include Ember World as a global baseline.
 - EIA only covers the US — don't request non-US entities from EIA.
 - Only request entities that exist in the catalog for that source.

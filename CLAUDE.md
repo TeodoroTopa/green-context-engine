@@ -52,7 +52,7 @@ Key directories:
 4. The data strategist auto-discovers new catalogs — no prompt changes needed
 
 ### Planned
-- Electricity Maps API, NOAA Climate Data
+- NOAA Climate Data
 
 ## Agent Pipeline (per story)
 

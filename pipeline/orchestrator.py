@@ -21,7 +21,6 @@ from pipeline.generation.editor import check_draft
 from pipeline.monitors.rss_monitor import RSSMonitor
 from pipeline.publishing.notion import NotionPublisher
 from pipeline.sources.eia import EIASource
-from pipeline.sources.electricity_maps import ElectricityMapsSource
 from pipeline.sources.ember import EmberSource
 from pipeline.sources.gfw import GFWSource
 from pipeline.sources.iucn import IUCNSource
@@ -67,10 +66,6 @@ class Pipeline:
         if noaa_key:
             sources["noaa"] = NOAASource(api_key=noaa_key)
             logger.info("NOAA source enabled")
-        emaps_key = os.getenv("ELECTRICITY_MAPS_API_KEY")
-        if emaps_key:
-            sources["electricity_maps"] = ElectricityMapsSource(api_key=emaps_key)
-            logger.info("Electricity Maps source enabled")
 
         self.enricher = Enricher(sources, self.client)
         self.drafter = Drafter(self.client)
