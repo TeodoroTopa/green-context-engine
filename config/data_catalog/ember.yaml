@@ -7,11 +7,13 @@ connector: pipeline.sources.ember.EmberSource
 env_key: EMBER_API_KEY
 
 data_types:
-  - electricity generation by fuel type (TWh, yearly and monthly)
-  - carbon intensity (gCO2/kWh, yearly and monthly)
-  - power sector emissions (yearly and monthly)
-  - electricity demand (yearly)
-  - installed capacity (monthly)
+  - "electricity generation by fuel type (TWh, yearly) — e.g., Coal: 228 TWh, Solar: 5.2 TWh"
+  - "carbon intensity (gCO2/kWh, yearly) — how much CO2 per unit of electricity"
+
+# Available in the Ember API but NOT yet pulled by the connector:
+# - power sector emissions by fuel type (mtCO2, yearly)
+# - electricity demand (TWh + per-capita, yearly)
+# - installed capacity by source (GW, monthly)
 
 entities:
   global:

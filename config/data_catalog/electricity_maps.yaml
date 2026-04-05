@@ -7,9 +7,8 @@ connector: pipeline.sources.electricity_maps.ElectricityMapsSource
 env_key: ELECTRICITY_MAPS_API_KEY
 
 data_types:
-  - real-time carbon intensity (gCO2eq/kWh, lifecycle or direct)
-  - power consumption breakdown by source type (MW)
-  - estimated vs measured data flag
+  - "carbon_intensity_realtime: real-time carbon intensity (gCO2eq/kWh)"
+  - "power_breakdown: power consumption breakdown by source type (MW) — e.g., wind: 15000 MW, coal: 12000 MW"
 
 entities:
   europe:

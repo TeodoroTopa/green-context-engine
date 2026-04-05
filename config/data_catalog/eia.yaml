@@ -7,8 +7,11 @@ connector: pipeline.sources.eia.EIASource
 env_key: EIA_API_KEY
 
 data_types:
-  - electricity generation by fuel type (thousand MWh, annual)
-  - installed/operable generator capacity
+  - "electricity generation by fuel type (TWh, annual) — e.g., natural gas: 73.3 TWh (36%), solar: 55.6 TWh (27%)"
+
+# Available in the EIA API but NOT yet pulled by the connector:
+# - installed/operable generator capacity
+# - fuel prices, consumption data
 
 coverage: "United States only (national + 50 states + DC)"
 

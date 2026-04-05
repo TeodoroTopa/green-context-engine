@@ -8,9 +8,12 @@ connector: pipeline.sources.iucn.IUCNSource
 env_key: IUCN_API_KEY
 
 data_types:
-  - threatened species count by country and threat category
-  - species assessments (CR, EN, VU, NT, LC, DD, EX, EW)
-  - total assessed species per country
+  - "threatened_species: count by threat category (CR=Critically Endangered, EN=Endangered, VU=Vulnerable, NT=Near Threatened, LC=Least Concern)"
+  - "total_assessed: total species assessed per country"
+
+note: >
+  IUCN API key is currently not configured. Connector is built and ready;
+  apply for a key at https://api.iucnredlist.org/ to enable this source.
 
 coverage: "Global — all countries with IUCN assessments"
 
