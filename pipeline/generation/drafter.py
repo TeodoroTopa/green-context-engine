@@ -28,12 +28,28 @@ class Drafter:
         self.client = client
         self.model = model
 
-    def draft(self, enriched: EnrichedStory, tracker: UsageTracker | None = None) -> Path:
+    def draft(self, enriched: EnrichedStory, tracker: UsageTracker | None = None,
+              feedback: str = "") -> Path:
         """Generate a draft post and save to content/drafts/.
+
+        Args:
+            enriched: The enriched story with data.
+            tracker: Optional usage tracker.
+            feedback: Optional editor feedback from a previous failed draft
+                      attempt. Appended to the prompt so the drafter avoids
+                      the same mistakes.
 
         Returns the path to the saved draft file.
         """
         prompt = build_draft_prompt(enriched)
+        if feedback:
+            prompt += (
+                f"\n<feedback>\n"
+                f"A previous draft of this story was rejected by the editor:\n"
+                f"{feedback}\n"
+                f"Avoid these issues in your new draft.\n"
+                f"</feedback>"
+            )
         draft_text = self._generate(prompt, tracker)
 
         violations = check_voice(draft_text)
