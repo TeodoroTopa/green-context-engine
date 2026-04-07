@@ -62,7 +62,8 @@ class _Messages:
 
         try:
             result = subprocess.run(
-                ["claude", "-p", prompt, "--output-format", "json"],
+                ["claude", "-p", "--output-format", "json"],
+                input=prompt,
                 capture_output=True,
                 text=True,
                 encoding="utf-8",

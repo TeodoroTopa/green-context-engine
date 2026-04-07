@@ -26,9 +26,9 @@ def test_create_builds_prompt_with_system():
             messages=[{"role": "user", "content": "Hello"}],
         )
 
-    # Check the prompt sent to claude CLI
+    # Check the prompt sent via stdin
     call_args = mock_run.call_args
-    prompt = call_args.args[0][2]  # ["claude", "-p", <prompt>, ...]
+    prompt = call_args.kwargs.get("input", "")
     assert "[System]" in prompt
     assert "You are a test assistant." in prompt
     assert "[User]" in prompt
