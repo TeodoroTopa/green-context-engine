@@ -27,6 +27,11 @@ class Story:
     source: str  # e.g. "mongabay"
     feed_name: str  # e.g. "mongabay_energy"
     full_text: str = ""  # Full article text, fetched separately
+    topics: list[str] = None  # Matched relevance keywords
+
+    def __post_init__(self):
+        if self.topics is None:
+            self.topics = []
 
 
 class RSSMonitor:
@@ -87,15 +92,22 @@ class RSSMonitor:
                 source=feed_cfg["source"],
                 feed_name=feed_cfg["name"],
             )
-            if self.keywords and not self._is_relevant(story):
-                logger.debug(f"Filtered out (no keyword match): {story.title}")
-                self.seen.add(guid)  # still mark seen so we don't re-check
-                continue
+            if self.keywords:
+                matched = self._matched_keywords(story)
+                if not matched:
+                    logger.debug(f"Filtered out (no keyword match): {story.title}")
+                    self.seen.add(guid)
+                    continue
+                story.topics = matched
             stories.append(story)
             self.seen.add(guid)
         return stories
 
     def _is_relevant(self, story: Story) -> bool:
         """Check if story title or summary contains any relevance keyword."""
+        return len(self._matched_keywords(story)) > 0
+
+    def _matched_keywords(self, story: Story) -> list[str]:
+        """Return list of relevance keywords found in the story title/summary."""
         text = f"{story.title} {story.summary}".lower()
-        return any(kw in text for kw in self.keywords)
+        return [kw for kw in self.keywords if kw in text]

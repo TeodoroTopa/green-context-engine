@@ -82,7 +82,7 @@ class NotionPublisher:
             logger.error(f"Failed to check for existing page: {e}")
             return None
 
-    def create_story(self, title: str, source_url: str = "", source_name: str = "", topics: list[str] | None = None) -> str | None:
+    def create_story(self, title: str, source_url: str = "", source_name: str = "", topics: list[str] | None = None, published_date: str = "") -> str | None:
         """Create a Notion page for a newly discovered story (status: Queued).
 
         Checks for duplicates by source URL first. If a page with the same
@@ -105,6 +105,8 @@ class NotionPublisher:
             properties["Source"] = {"select": {"name": source_name}}
         if source_url:
             properties["userDefined:URL"] = {"url": source_url}
+        if published_date:
+            properties["Date Found"] = {"date": {"start": self._normalize_date(published_date)}}
         if topics:
             properties["Topics"] = {"multi_select": [{"name": t} for t in topics]}
 

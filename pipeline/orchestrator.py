@@ -234,6 +234,8 @@ class Pipeline:
                 if self.notion:
                     notion_page_id = self.notion.create_story(
                         story.title, source_url=story.url, source_name=story.source,
+                        published_date=story.published,
+                        topics=story.topics[:5] if story.topics else None,
                     )
                     if notion_page_id:
                         self.notion.update_status(notion_page_id, "Review")
