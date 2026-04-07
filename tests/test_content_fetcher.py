@@ -13,10 +13,10 @@ def _make_story(source="electrek", summary="Short teaser.", url="https://example
     )
 
 
-def test_skips_known_unfetchable_sources():
-    """Utility Dive and Renew Economy are skipped (anti-bot / JS paywall)."""
-    assert _should_skip(_make_story(source="utilitydive"), None) is True
-    assert _should_skip(_make_story(source="reneweconomy"), None) is True
+def test_does_not_skip_fetchable_sources():
+    """Fetchable sources are not skipped."""
+    assert _should_skip(_make_story(source="electrek"), None) is False
+    assert _should_skip(_make_story(source="mongabay"), None) is False
 
 
 def test_skips_when_config_says_false():
