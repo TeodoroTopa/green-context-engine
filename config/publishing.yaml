@@ -1,10 +1,10 @@
 # Publishing and editorial queue configuration
 
 notion:
-  # Energy Editorial Queue database
-  database_id: "3511cbe635574bebbf5041e5a13e622c"
-  data_source_id: "89c62ab7-31d3-42ab-b832-d04b433346a6"
-  # Status values: Queued, Enriching, Drafted, Review, Approved, Published
+  # Energy Editorial Queue database (Notion Plus account)
+  database_id: "33b15806d2a6814f9c59c673e4c878c8"
+  # Status values: Review, Approved, Rejected, Published
+  # Feedback: rich text field for rejection notes (filled by Teo)
 
 # Pipeline pushes drafts to Notion automatically when NOTION_TOKEN is set.
 # Without the token, drafts are saved locally only.

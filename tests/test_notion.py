@@ -8,7 +8,7 @@ from pipeline.publishing.notion import NotionPublisher
 
 @patch("pipeline.publishing.notion.requests")
 def test_create_story_sends_correct_payload(mock_requests):
-    """create_story sends a POST to Notion with status Queued."""
+    """create_story sends a POST to Notion with status Review."""
     mock_resp = MagicMock()
     mock_resp.json.return_value = {"id": "page-123"}
     mock_requests.post.return_value = mock_resp
@@ -19,7 +19,7 @@ def test_create_story_sends_correct_payload(mock_requests):
     assert page_id == "page-123"
     call_args = mock_requests.post.call_args
     payload = call_args.kwargs["json"]
-    assert payload["properties"]["Status"]["select"]["name"] == "Queued"
+    assert payload["properties"]["Status"]["select"]["name"] == "Review"
     assert payload["properties"]["Story Title"]["title"][0]["text"]["content"] == "Test Story"
 
 

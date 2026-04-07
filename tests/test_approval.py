@@ -92,7 +92,7 @@ def test_find_page_by_url_returns_existing(mock_requests):
 
     assert result == "page-existing"
     call_payload = mock_requests.post.call_args.kwargs["json"]
-    assert call_payload["filter"]["property"] == "userDefined:URL"
+    assert call_payload["filter"]["property"] == "URL"
     assert call_payload["filter"]["url"]["equals"] == "https://example.com/article"
 
 
@@ -140,7 +140,7 @@ def test_get_pages_by_status(mock_requests):
             "id": "page-abc",
             "properties": {
                 "Story Title": {"title": [{"text": {"content": "My Story"}}]},
-                "userDefined:URL": {"url": "https://example.com"},
+                "URL": {"url": "https://example.com"},
                 "Source": {"select": {"name": "Mongabay"}},
             },
         }]

@@ -62,7 +62,7 @@ class NotionPublisher:
             return None
         payload = {
             "filter": {
-                "property": "userDefined:URL",
+                "property": "URL",
                 "url": {"equals": url},
             }
         }
@@ -99,12 +99,12 @@ class NotionPublisher:
 
         properties = {
             "Story Title": {"title": [{"text": {"content": title}}]},
-            "Status": {"select": {"name": "Queued"}},
+            "Status": {"select": {"name": "Review"}},
         }
         if source_name:
             properties["Source"] = {"select": {"name": source_name}}
         if source_url:
-            properties["userDefined:URL"] = {"url": source_url}
+            properties["URL"] = {"url": source_url}
         if published_date:
             properties["Date Found"] = {"date": {"start": self._normalize_date(published_date)}}
         if topics:
@@ -182,7 +182,7 @@ class NotionPublisher:
         if source_name:
             properties["Source"] = {"select": {"name": source_name}}
         if source_url:
-            properties["userDefined:URL"] = {"url": source_url}
+            properties["URL"] = {"url": source_url}
         if frontmatter.get("date"):
             properties["Date Found"] = {"date": {"start": self._normalize_date(frontmatter["date"])}}
         if topics:
@@ -238,7 +238,7 @@ class NotionPublisher:
                 props = page.get("properties", {})
                 title_arr = props.get("Story Title", {}).get("title", [])
                 title = title_arr[0]["text"]["content"] if title_arr else ""
-                url = props.get("userDefined:URL", {}).get("url", "")
+                url = props.get("URL", {}).get("url", "")
                 source = props.get("Source", {}).get("select", {})
                 pages.append({
                     "id": page["id"],
@@ -251,6 +251,35 @@ class NotionPublisher:
         except requests.RequestException as e:
             logger.error(f"Failed to query Notion database: {e}")
             return []
+
+    def get_rejected_feedback(self) -> list[dict]:
+        """Get all rejected pages with their feedback notes.
+
+        Returns:
+            List of dicts with keys: title, url, feedback.
+        """
+        pages = self.get_pages_by_status("Rejected")
+        results = []
+        for page in pages:
+            # Fetch full page to get Feedback property
+            try:
+                resp = requests.get(
+                    f"{NOTION_API}/pages/{page['id']}",
+                    headers=self.headers, timeout=15,
+                )
+                resp.raise_for_status()
+                props = resp.json().get("properties", {})
+                feedback_rt = props.get("Feedback", {}).get("rich_text", [])
+                feedback = "".join(item.get("text", {}).get("content", "") for item in feedback_rt)
+                if feedback:
+                    results.append({
+                        "title": page["title"],
+                        "url": page.get("url", ""),
+                        "feedback": feedback,
+                    })
+            except requests.RequestException as e:
+                logger.warning(f"Failed to read feedback for {page['title']}: {e}")
+        return results
 
     def get_page_content(self, page_id: str) -> str:
         """Fetch a page's content blocks and convert back to markdown.
@@ -300,7 +329,7 @@ class NotionPublisher:
             # Extract metadata
             title_arr = props.get("Story Title", {}).get("title", [])
             title = title_arr[0]["text"]["content"] if title_arr else "Untitled"
-            url = props.get("userDefined:URL", {}).get("url", "")
+            url = props.get("URL", {}).get("url", "")
             source_sel = props.get("Source", {}).get("select", {})
             source_name = source_sel.get("name", "") if source_sel else ""
             date_prop = props.get("Date Found", {}).get("date", {})
