@@ -78,12 +78,17 @@ def build_draft_prompt(enriched) -> str:
     """
     source_name = enriched.story.source.capitalize() if enriched.story.source else "Source"
 
+    article_block = ""
+    if enriched.story.full_text and len(enriched.story.full_text.split()) > len(enriched.story.summary.split()) + 50:
+        article_block = f"\n<article>\n{enriched.story.full_text}\n</article>\n"
+
     return f"""\
 <story>
 Title: {enriched.story.title}
 Source: {source_name} ({enriched.story.url})
 Summary: {enriched.story.summary}
 </story>
+{article_block}
 
 <data>
 {enriched.data_summary}

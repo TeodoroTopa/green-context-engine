@@ -13,6 +13,7 @@ feeds:
   - name: carbonbrief_main
     url: "https://www.carbonbrief.org/feed/"
     source: carbonbrief
+    fetch_content: false  # RSS already has full article text (~945 words)
 
   - name: pvmagazine
     url: "https://www.pv-magazine.com/feed/"

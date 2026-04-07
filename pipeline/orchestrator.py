@@ -17,6 +17,7 @@ from dotenv import load_dotenv
 from pipeline.analysis.article_selector import select_best_stories
 from pipeline.analysis.enricher import Enricher
 from pipeline.claude_code_client import ClaudeCodeClient
+from pipeline.content.fetcher import fetch_article_text
 from pipeline.generation.drafter import Drafter
 from pipeline.generation.editor import check_draft
 from pipeline.monitors.rss_monitor import RSSMonitor
@@ -70,6 +71,7 @@ class Pipeline:
 
         self.enricher = Enricher(sources, self.client)
         self.drafter = Drafter(self.client)
+        self._feeds_config = []  # loaded lazily in run()
 
         # Notion is optional
         try:
@@ -98,6 +100,10 @@ class Pipeline:
         if tracker is None:
             tracker = UsageTracker()
 
+        # Fetch full article text if not already populated
+        if not story.full_text:
+            story.full_text = fetch_article_text(story, self._feeds_config)
+
         enriched = self.enricher.enrich(story, tracker)
         if not enriched.ember_data:
             raise ValueError(f"No data available for '{story.title}'")
@@ -124,6 +130,7 @@ class Pipeline:
                     story_summary=story.summary,
                     story_source=story.source,
                     data_text=enriched.data_text,
+                    story_full_text=story.full_text,
                     tracker=tracker,
                 )
                 if edit_result["pass"]:
@@ -164,6 +171,7 @@ class Pipeline:
             List of paths to generated draft files.
         """
         feeds, keywords = self._load_feeds(source)
+        self._feeds_config = feeds  # store for content fetcher
         monitor = RSSMonitor(feeds, relevance_keywords=keywords, skip_dedup=True)
         stories = monitor.check_feeds()
         logger.info(f"Found {len(stories)} candidate stories from RSS")

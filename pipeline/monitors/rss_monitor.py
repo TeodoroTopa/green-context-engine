@@ -26,6 +26,7 @@ class Story:
     published: str  # raw date string from feed
     source: str  # e.g. "mongabay"
     feed_name: str  # e.g. "mongabay_energy"
+    full_text: str = ""  # Full article text, fetched separately
 
 
 class RSSMonitor:

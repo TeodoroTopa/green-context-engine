@@ -45,7 +45,7 @@ PASS = zero critical, zero high, ≤2 medium.
 <source_material>
 Story: {story_title} ({story_source})
 Summary: {story_summary}
-
+{article_text_block}
 Data provided to writer:
 {data_text}
 </source_material>
@@ -64,6 +64,7 @@ def check_draft(
     story_summary: str,
     story_source: str,
     data_text: str,
+    story_full_text: str = "",
     tracker: UsageTracker | None = None,
 ) -> dict:
     """Fact-check a draft against its source material.
@@ -82,10 +83,14 @@ def check_draft(
         Dict with keys: pass (bool), errors (list), summary (str).
     """
     draft_text = draft_path.read_text(encoding="utf-8")
+    article_text_block = ""
+    if story_full_text:
+        article_text_block = f"\nArticle excerpt:\n{story_full_text}\n"
     prompt = EDITOR_PROMPT.format(
         story_title=story_title,
         story_summary=story_summary,
         story_source=story_source,
+        article_text_block=article_text_block,
         data_text=data_text,
         draft_text=draft_text,
     )
