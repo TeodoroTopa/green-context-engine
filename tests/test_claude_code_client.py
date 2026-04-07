@@ -67,6 +67,7 @@ def test_create_handles_cli_error():
     mock_result = MagicMock()
     mock_result.returncode = 1
     mock_result.stderr = "CLI error"
+    mock_result.stdout = ""  # no output
 
     with patch("pipeline.claude_code_client.subprocess.run", return_value=mock_result):
         response = msgs.create(

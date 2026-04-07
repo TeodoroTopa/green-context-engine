@@ -12,6 +12,7 @@ Usage:
 
 import json
 import logging
+import os
 import subprocess
 
 logger = logging.getLogger(__name__)
@@ -61,6 +62,10 @@ class _Messages:
         logger.info(f"Claude Code proxy: routing {len(prompt)} chars through claude CLI")
 
         try:
+            # Remove ANTHROPIC_API_KEY from env so claude CLI uses subscription
+            # auth instead of the API (which may have no credits).
+            env = {k: v for k, v in os.environ.items() if k != "ANTHROPIC_API_KEY"}
+
             result = subprocess.run(
                 ["claude", "-p", "--output-format", "json"],
                 input=prompt,
@@ -68,12 +73,18 @@ class _Messages:
                 text=True,
                 encoding="utf-8",
                 timeout=120,
+                env=env,
             )
-            if result.returncode != 0:
-                logger.error(f"claude CLI failed: {result.stderr}")
-                return _Response("Error: claude CLI returned non-zero exit code")
+            # Parse JSON even on non-zero exit (CLI returns rc=1 for some errors
+            # but still provides valid JSON with error details)
+            if not result.stdout.strip():
+                logger.error(f"claude CLI returned no output: {result.stderr}")
+                return _Response("Error: claude CLI returned no output")
 
             data = json.loads(result.stdout)
+            if data.get("is_error"):
+                logger.error(f"claude CLI error: {data.get('result', '')[:200]}")
+                return _Response(f"Error: {data.get('result', 'unknown')}")
             text = data.get("result", "")
             usage = data.get("usage", {})
             return _Response(
