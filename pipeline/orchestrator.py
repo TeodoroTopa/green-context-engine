@@ -19,7 +19,7 @@ from pipeline.analysis.enricher import Enricher
 from pipeline.claude_code_client import ClaudeCodeClient
 from pipeline.content.fetcher import fetch_article_text
 from pipeline.generation.drafter import Drafter
-from pipeline.generation.editor import check_draft
+from pipeline.generation.editor import check_draft, verify_draft
 from pipeline.monitors.rss_monitor import RSSMonitor
 from pipeline.publishing.notion import NotionPublisher
 from pipeline.sources.eia import EIASource
@@ -109,8 +109,14 @@ class Pipeline:
             raise ValueError(f"No data available for '{story.title}'")
 
         max_draft_attempts = 2
-        max_revisions = 2
-        edit_result = {"pass": False, "summary": "Not checked"}
+        edit_result = {"verdict": "fail", "summary": "Not checked"}
+        editor_kwargs = dict(
+            story_title=story.title,
+            story_summary=story.summary,
+            story_source=story.source,
+            data_text=enriched.data_text,
+            story_full_text=story.full_text,
+        )
 
         for draft_attempt in range(max_draft_attempts):
             if draft_attempt == 0:
@@ -123,31 +129,40 @@ class Pipeline:
                 )
             logger.info(f"Drafted: {draft_path.name}")
 
-            for revision in range(max_revisions + 1):
-                edit_result = check_draft(
-                    self.client, self.drafter.model, draft_path,
-                    story_title=story.title,
-                    story_summary=story.summary,
-                    story_source=story.source,
-                    data_text=enriched.data_text,
-                    story_full_text=story.full_text,
-                    tracker=tracker,
-                )
-                if edit_result["pass"]:
-                    logger.info(f"Editor PASSED: {draft_path.name}")
-                    logger.info(f"  {tracker.summary()}")
-                    return enriched, draft_path, edit_result
-                if revision < max_revisions:
-                    logger.info(
-                        f"Editor found errors (revision {revision + 1}/{max_revisions}), revising..."
+            # Editor: pass / fix / fail
+            edit_result = check_draft(
+                self.client, self.drafter.model, draft_path,
+                tracker=tracker, **editor_kwargs,
+            )
+            verdict = edit_result.get("verdict", "fail")
+
+            if verdict == "pass":
+                logger.info(f"  {tracker.summary()}")
+                return enriched, draft_path, edit_result
+
+            if verdict == "fix":
+                # Editor fixed the draft — write corrected version
+                fixed_draft = edit_result.get("fixed_draft", "")
+                if fixed_draft:
+                    draft_path.write_text(fixed_draft, encoding="utf-8")
+                    logger.info(f"Editor fixed draft, verifying...")
+
+                    # Verification pass — pass/fail only, no more fixes
+                    verify_result = verify_draft(
+                        self.client, self.drafter.model, draft_path,
+                        tracker=tracker, **editor_kwargs,
                     )
-                    self.drafter.revise(
-                        draft_path, edit_result.get("errors", []),
-                        enriched.data_text, tracker,
-                    )
+                    if verify_result.get("verdict") == "pass":
+                        logger.info(f"  {tracker.summary()}")
+                        return enriched, draft_path, verify_result
+                    else:
+                        logger.warning(
+                            f"Verification failed after fix: {verify_result.get('summary', '')[:100]}"
+                        )
+                        edit_result = verify_result  # use as feedback for redraft
 
             logger.warning(
-                f"Draft attempt {draft_attempt + 1} failed: {edit_result['summary'][:100]}"
+                f"Draft attempt {draft_attempt + 1} failed: {edit_result.get('summary', '')[:100]}"
             )
 
         # All attempts exhausted — skip this story

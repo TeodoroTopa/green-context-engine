@@ -46,11 +46,11 @@ def test_pipeline_runs_end_to_end(mock_dotenv, mock_yaml, mock_monitor_cls, mock
         msg.usage.output_tokens = 50
         return msg
 
-    # Claude calls: strategist, draft, editor (analyzer removed)
+    # Claude calls: strategist, draft, editor (pass verdict)
     mock_client.messages.create.side_effect = [
         make_response('{"fetches": [{"source": "ember", "entity": "World", "role": "primary"}], "reasoning": "test"}'),
         make_response("---\ntitle: Test\nstatus: draft\n---\n\nTest content."),
-        make_response('{"pass": true, "errors": [], "summary": "All claims verified."}'),
+        make_response('{"verdict": "pass", "summary": "All claims verified."}'),
     ]
     mock_anthropic_cls.return_value = mock_client
 
@@ -105,7 +105,7 @@ def test_research_and_draft_standalone(mock_dotenv, mock_eia_cls, mock_ember_cls
     mock_client.messages.create.side_effect = [
         make_response('{"fetches": [{"source": "ember", "entity": "World", "role": "primary"}], "reasoning": "test"}'),
         make_response("---\ntitle: Coal Test\nstatus: draft\n---\n\nCoal content."),
-        make_response('{"pass": true, "errors": [], "summary": "OK."}'),
+        make_response('{"verdict": "pass", "summary": "OK."}'),
     ]
     mock_anthropic_cls.return_value = mock_client
 
@@ -119,7 +119,7 @@ def test_research_and_draft_standalone(mock_dotenv, mock_eia_cls, mock_ember_cls
         enriched, draft_path, edit_result = pipeline.research_and_draft(story)
 
         assert draft_path.exists()
-        assert edit_result["pass"] is True
+        assert edit_result["verdict"] == "pass"
         assert enriched.entities == ["World"]
     finally:
         drafter_mod.DRAFTS_DIR = original_dir

@@ -1,8 +1,8 @@
-"""Editor agent — fact-checks drafts against source data.
+"""Editor agent — fact-checks drafts and fixes issues directly.
 
-Receives the draft AND the original source material (story + data),
-verifies every claim traces back to the provided sources, and checks
-editorial quality. Replaces the old quality_gate.py.
+Three outcomes: pass (clean), fix (editor corrects issues itself), or fail
+(needs full redraft). After a "fix", a verification pass confirms the
+editor's corrections didn't introduce new problems.
 """
 
 import json
@@ -17,30 +17,55 @@ logger = logging.getLogger(__name__)
 
 EDITOR_PROMPT = """\
 Fact-check this draft against the source material. Every claim must trace to
-the Story or Data below.
+the Story, Article, or Data below.
 
 <checks>
-CRITICAL — flag these:
-- Any factual claim not in the Story or Data
-- Any distortion (e.g., "multi-year decline" when data shows mixed trend)
-- Data year ≠ story year without explicit label
-
-HIGH — flag these:
-- Trend words ("reversing," "first time," "steady") not supported by the data
-- Numbers that can't be traced to source data or a labeled calculation
-
-MEDIUM — flag these:
-- Lazy adjectives without evidence, fluff phrases, missing frontmatter
+CRITICAL: factual claims not in any source, distortions, unlabeled data-year mismatches
+HIGH: unsupported trend words, untraceable numbers
+MEDIUM: lazy adjectives, fluff phrases, missing frontmatter
 </checks>
 
-Return JSON only:
-{{
-  "pass": true/false,
-  "errors": [{{"severity": "critical|high|medium", "claim": "...", "issue": "...", "fix": "..."}}],
-  "summary": "1-2 sentence assessment"
-}}
+<verdicts>
+Return JSON with one of three verdicts:
 
-PASS = zero critical, zero high, ≤2 medium.
+1. PASS — draft is clean:
+{{"verdict": "pass", "summary": "1-2 sentence assessment"}}
+
+2. FIX — draft has fixable issues (unsourced claims, minor inaccuracies).
+   Fix them yourself and return the corrected draft. Remove unsourced claims
+   rather than guessing replacements. Only use numbers from the source material.
+{{"verdict": "fix", "fixed_draft": "the complete corrected markdown including frontmatter", "changes": ["what you changed"], "summary": "..."}}
+
+3. FAIL — draft has fundamental problems requiring a complete rewrite:
+{{"verdict": "fail", "errors": [{{"severity": "...", "claim": "...", "issue": "...", "fix": "..."}}], "summary": "..."}}
+</verdicts>
+
+Prefer "fix" over "fail" whenever possible. Most issues (an unsourced number,
+a claim from training data, a mislabeled year) can be fixed by removing or
+correcting a single sentence. Only use "fail" when the entire structure or
+angle is wrong.
+
+<source_material>
+Story: {story_title} ({story_source})
+Summary: {story_summary}
+{article_text_block}
+Data provided to writer:
+{data_text}
+</source_material>
+
+<draft>
+{draft_text}
+</draft>
+"""
+
+VERIFY_PROMPT = """\
+Verify this draft against the source material. Every claim must trace to
+the Story, Article, or Data below. This is a final check — pass or fail only.
+
+Return JSON only:
+{{"verdict": "pass", "summary": "..."}}
+or
+{{"verdict": "fail", "summary": "what's wrong"}}
 
 <source_material>
 Story: {story_title} ({story_source})
@@ -67,25 +92,15 @@ def check_draft(
     story_full_text: str = "",
     tracker: UsageTracker | None = None,
 ) -> dict:
-    """Fact-check a draft against its source material.
-
-    Args:
-        client: Anthropic API client (or ClaudeCodeClient).
-        model: Model ID to use.
-        draft_path: Path to the draft markdown file.
-        story_title: Original story title.
-        story_summary: Original story summary.
-        story_source: Source name (e.g., "Mongabay").
-        data_text: The formatted data text the drafter received.
-        tracker: Optional usage tracker.
+    """Fact-check a draft. Returns pass/fix/fail verdict.
 
     Returns:
-        Dict with keys: pass (bool), errors (list), summary (str).
+        Dict with keys: verdict ("pass"|"fix"|"fail"), summary (str),
+        and optionally: fixed_draft (str), changes (list), errors (list).
     """
     draft_text = draft_path.read_text(encoding="utf-8")
-    article_text_block = ""
-    if story_full_text:
-        article_text_block = f"\nArticle excerpt:\n{story_full_text}\n"
+    article_text_block = f"\nArticle excerpt:\n{story_full_text}\n" if story_full_text else ""
+
     prompt = EDITOR_PROMPT.format(
         story_title=story_title,
         story_summary=story_summary,
@@ -97,7 +112,7 @@ def check_draft(
 
     response = client.messages.create(
         model=model,
-        max_tokens=800,
+        max_tokens=3000,
         messages=[{"role": "user", "content": prompt}],
     )
     if tracker:
@@ -106,24 +121,70 @@ def check_draft(
     text = strip_code_fences(response.content[0].text)
     try:
         result = json.loads(text)
-        passed = result.get("pass", False)
-        errors = result.get("errors", [])
-        summary = result.get("summary", "")
+        verdict = result.get("verdict", "")
 
-        if passed:
+        # Handle legacy format (old "pass" boolean)
+        if "pass" in result and "verdict" not in result:
+            verdict = "pass" if result["pass"] else "fail"
+            result["verdict"] = verdict
+
+        if verdict == "pass":
             logger.info(f"Editor PASSED: {draft_path.name}")
+        elif verdict == "fix":
+            changes = result.get("changes", [])
+            logger.info(f"Editor FIXED: {draft_path.name} — {', '.join(changes)[:100]}")
         else:
-            critical = [e for e in errors if e.get("severity") == "critical"]
-            high = [e for e in errors if e.get("severity") == "high"]
-            logger.warning(
-                f"Editor FAILED: {draft_path.name} — "
-                f"{len(critical)} critical, {len(high)} high: {summary[:150]}"
-            )
+            summary = result.get("summary", "")
+            logger.warning(f"Editor FAILED: {draft_path.name} — {summary[:150]}")
 
-        return {"pass": passed, "errors": errors, "summary": summary}
+        return result
 
     except json.JSONDecodeError:
-        # Fallback: parse prose response (dev mode)
+        return _parse_prose_response(text, draft_path.name)
+
+
+def verify_draft(
+    client,
+    model: str,
+    draft_path: Path,
+    story_title: str,
+    story_summary: str,
+    story_source: str,
+    data_text: str,
+    story_full_text: str = "",
+    tracker: UsageTracker | None = None,
+) -> dict:
+    """Verification pass — pass or fail only, no fixes. Used after editor fixes."""
+    draft_text = draft_path.read_text(encoding="utf-8")
+    article_text_block = f"\nArticle excerpt:\n{story_full_text}\n" if story_full_text else ""
+
+    prompt = VERIFY_PROMPT.format(
+        story_title=story_title,
+        story_summary=story_summary,
+        story_source=story_source,
+        article_text_block=article_text_block,
+        data_text=data_text,
+        draft_text=draft_text,
+    )
+
+    response = client.messages.create(
+        model=model,
+        max_tokens=400,
+        messages=[{"role": "user", "content": prompt}],
+    )
+    if tracker:
+        tracker.track(response, "verification")
+
+    text = strip_code_fences(response.content[0].text)
+    try:
+        result = json.loads(text)
+        verdict = result.get("verdict", "fail")
+        if verdict == "pass":
+            logger.info(f"Verification PASSED: {draft_path.name}")
+        else:
+            logger.warning(f"Verification FAILED: {draft_path.name} — {result.get('summary', '')[:100]}")
+        return result
+    except json.JSONDecodeError:
         return _parse_prose_response(text, draft_path.name)
 
 
@@ -137,9 +198,10 @@ def _parse_prose_response(text: str, filename: str) -> dict:
     if summary_match:
         summary = summary_match.group(1).strip()[:300]
 
+    verdict = "pass" if passed else "fail"
     if passed:
         logger.info(f"Editor PASSED (prose fallback): {filename}")
     else:
         logger.warning(f"Editor FAILED (prose fallback): {filename} — {summary[:100]}")
 
-    return {"pass": passed, "errors": [], "summary": summary or "Parsed from prose response"}
+    return {"verdict": verdict, "summary": summary or "Parsed from prose response"}
