@@ -16,14 +16,25 @@ from pipeline.usage import UsageTracker
 logger = logging.getLogger(__name__)
 
 EDITOR_PROMPT = """\
-Fact-check this draft against the source material. Every claim must trace to
+Fact-check this draft against the source material. Every NUMBER must trace to
 the Story, Article, or Data below.
 
-<checks>
-CRITICAL: factual claims not in any source, distortions, unlabeled data-year mismatches
-HIGH: unsupported trend words, untraceable numbers
-MEDIUM: lazy adjectives, fluff phrases, missing frontmatter
-</checks>
+<reject>
+Fix or fail these:
+- Numbers not traceable to any source (fabricated data)
+- Claims that contradict the source material
+- Data years not labeled when they differ from the story year
+- Factual statements about events not mentioned in the article
+</reject>
+
+<allow>
+Do NOT flag these — they are normal editorial practice:
+- Reasonable characterizations of sourced numbers: "nearly double" for 1.5x-2x,
+  "more than half" for 51%+, "roughly" or "about" within 10%, "a fraction of"
+- Derived calculations from sourced numbers (e.g., "44% above" from 680 vs 471)
+- Rounding (e.g., "384" for 383.78, "210" for 209.9)
+- Contextual interpretations that follow logically from the data
+</allow>
 
 <verdicts>
 Return JSON with one of three verdicts:
@@ -59,8 +70,13 @@ Data provided to writer:
 """
 
 VERIFY_PROMPT = """\
-Verify this draft against the source material. Every claim must trace to
-the Story, Article, or Data below. This is a final check — pass or fail only.
+Verify that every NUMBER in this draft traces to the source material below.
+This is a final check — pass or fail only.
+
+Editorial characterizations of sourced numbers are acceptable and should NOT
+be flagged (e.g., "nearly double" for 1.83x, "roughly a third" for 31%,
+rounding 383.78 to 384). Only fail if you find fabricated numbers or claims
+that directly contradict the sources.
 
 Return JSON only:
 {{"verdict": "pass", "summary": "..."}}
