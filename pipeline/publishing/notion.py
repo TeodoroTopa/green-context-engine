@@ -554,7 +554,7 @@ class NotionPublisher:
         if isinstance(date_val, str):
             # Try parsing common formats
             import datetime
-            for fmt in ("%Y-%m-%d", "%d %b %Y %H:%M:%S %z", "%d %b %Y"):
+            for fmt in ("%Y-%m-%d", "%a, %d %b %Y %H:%M:%S %z", "%d %b %Y %H:%M:%S %z", "%d %b %Y"):
                 try:
                     return datetime.datetime.strptime(date_val.strip(), fmt).strftime("%Y-%m-%d")
                 except ValueError:
