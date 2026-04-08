@@ -1,59 +1,102 @@
 # Energy Context Engine
 
-Automated pipeline: monitors energy/climate news → enriches with data from multiple APIs → AI drafts data-grounded briefs → AI editor fact-checks → human approves → publishes to teodorotopa.com.
+Automated pipeline: monitors energy/climate news → selects stories that match available data → fetches full articles → enriches with data from multiple APIs → AI drafts data-grounded briefs → AI editor fact-checks and fixes → human approves in Notion → publishes to teodorotopa.com.
 
 ## Architecture
 
 ```
 RSS feeds → Monitor (keyword filter, Notion-based dedup)
+         → Article Selector (AI picks stories best served by available data)
+         → Article Fetcher (trafilatura extracts full text from article URL)
          → Data Strategist (AI picks sources/entities/data_types to fetch)
-         → Enricher (fetches from Ember, EIA, GFW, NOAA + formats for drafter)
-         → Drafter (250-word brief with bold lead-in structure)
-         → Editor (fact-checks every claim against source data)
-         → Revision loop (max 2 attempts)
-         → Notion editorial queue → human approval → GitHub API → Vercel → live
+         → Enricher (parallel fetch from Ember, EIA, GFW, NOAA)
+         → Drafter (200-250 word brief with bold lead-in structure)
+         → Editor (pass / fix / fail — fixes issues directly when possible)
+         → Verification (read-only check after editor fixes)
+         → Notion "Review" → human approval → GitHub API → Vercel → live
 ```
 
 ## Key Directories
 
-- `pipeline/sources/` — data connectors (BaseSource interface)
-- `pipeline/analysis/` — data strategist, enricher, catalog loader
-- `pipeline/generation/` — drafter, editor, voice checker, prompts
-- `pipeline/publishing/` — Notion API, GitHub publishing
+- `pipeline/sources/` — data connectors (BaseSource interface, `**kwargs` for selective `data_types`)
+- `pipeline/analysis/` — article selector, data strategist, enricher, catalog loader
+- `pipeline/content/` — article text fetcher (trafilatura)
+- `pipeline/generation/` — drafter, editor (pass/fix/fail + verification), voice checker, prompts
+- `pipeline/publishing/` — Notion API (with feedback reader), GitHub publishing
 - `config/data_catalog/` — YAML catalogs (strategist reads these to decide what to fetch)
+- `config/feedback_rules.yaml` — learned writing rules from rejected drafts (loaded into drafter prompt)
 
 ## Data Sources
 
 | Source | What it provides | Scope |
 |--------|-----------------|-------|
-| **Ember** | Electricity generation by fuel type, carbon intensity | ~200 countries |
+| **Ember** | Electricity generation by fuel type, carbon intensity | ~200 countries + EU/OECD/ASEAN |
 | **EIA** | US electricity generation by fuel type with % breakdown | US national + 50 states |
-| **GFW** | Tree cover loss, deforestation drivers (why), carbon emissions | Global, country-level |
-| **NOAA** | Yearly temp, precip, heating/cooling degree days | 180+ countries, US states |
-| **IUCN** | Threatened species by category | Global (awaiting API key) |
+| **GFW** | Tree cover loss, deforestation drivers, forest carbon emissions | Global, country-level |
+| **NOAA** | Yearly/monthly temp, precip, heating/cooling degree days | 180+ countries, US states |
 
 ### Adding a New Source
 
-1. YAML in `config/data_catalog/` — entities + data_types
-2. Connector in `pipeline/sources/` extending `BaseSource`
+1. YAML in `config/data_catalog/` — entities + data_types (strategist auto-discovers)
+2. Connector in `pipeline/sources/` extending `BaseSource` (must accept `**kwargs`)
 3. Register in `pipeline/orchestrator.py`
-4. Strategist auto-discovers from catalog
+
+## News Sources
+
+Mongabay (3 feeds), Carbon Brief, PV Magazine, CleanTechnica, Electrek. Full article text fetched via trafilatura for all except Carbon Brief (RSS already has full text).
 
 ## Agent Pipeline
 
-All agents use `claude-opus-4-6`. Per story: strategist (1 call) → analyzer (1) → drafter (1) → editor (1-3) → reviser (0-2). Total: 4-7 calls.
+All agents use `claude-opus-4-6`. Per story:
+
+| Agent | Role | Calls |
+|-------|------|-------|
+| **Article Selector** | Picks best story from RSS candidates based on data fit | 1 (per source batch) |
+| **Data Strategist** | Picks which APIs/entities/data_types to fetch | 1 |
+| **Drafter** | Writes 200-250 word brief with bold lead-ins | 1-2 |
+| **Editor** | Fact-checks, returns pass/fix/fail. Fixes issues directly. | 1-2 |
+| **Verification** | Read-only check after editor fixes (pass/fail only) | 0-1 |
+
+Editor allows editorial characterizations (e.g., "nearly double" for 1.83x) but catches fabricated data. Total: 3-5 calls per story.
+
+## Daily Workflow (Windows Task Scheduler)
+
+**Morning** — `scripts/generate_drafts.bat`: runs pipeline once per source, generates one draft each. Drafts appear in Notion as "Review".
+
+**Afternoon** — `scripts/publish_and_learn.bat`:
+1. Publishes approved drafts to website via GitHub API → Vercel rebuild
+2. Reads rejected drafts + feedback from Notion, extracts generalized writing rules via Claude, saves to `config/feedback_rules.yaml`, archives processed rejections
+
+The drafter loads `feedback_rules.yaml` at runtime, so the pipeline learns from rejections over time.
+
+## Notion Editorial Queue
+
+Database: Notion Plus account. Statuses: Review → Approved/Rejected → Published.
+
+| Property | Type | Purpose |
+|----------|------|---------|
+| Story Title | title | Article headline |
+| Status | select | Review, Approved, Rejected, Published |
+| Source | select | News source (Mongabay, etc.) |
+| Date Found | date | Article publication date |
+| Topics | multi_select | Matched keywords (solar, wind, coal, etc.) |
+| URL | url | Original article link |
+| Feedback | rich text | Rejection notes (drives prompt improvement) |
 
 ## Commands
 
 ```bash
-# Run pipeline
-PIPELINE_MODE=dev python scripts/run_pipeline.py --source mongabay --max-stories 1
+# Generate drafts (one per source)
+PIPELINE_MODE=local python scripts/run_pipeline.py --source mongabay --max-stories 1
 
 # Standalone research (no Notion/publishing)
 python scripts/research_story.py --url "..." --title "..." --summary "..."
 
-# Publish approved
+# Publish approved drafts
 python scripts/publish_approved.py
+
+# Process rejection feedback into writing rules
+python scripts/process_feedback.py
 
 # Tests
 pytest tests/
@@ -63,15 +106,13 @@ pytest tests/
 
 | Variable | Required | Purpose |
 |----------|----------|---------|
-| `ANTHROPIC_API_KEY` | prod | Claude API |
 | `EMBER_API_KEY` | yes | Ember electricity data |
 | `EIA_API_KEY` | yes | EIA US electricity data |
 | `GFW_API_KEY` | optional | Global Forest Watch |
 | `NOAA_API_KEY` | optional | NOAA climate data |
-| `IUCN_API_KEY` | optional | IUCN Red List (awaiting key) |
-| `NOTION_TOKEN` | optional | Editorial queue |
+| `NOTION_TOKEN` | optional | Editorial queue (Notion Plus) |
 | `WEBSITE_GITHUB_TOKEN` | optional | Publish to website repo |
-| `PIPELINE_MODE` | optional | `dev`/`local` = claude CLI proxy |
+| `PIPELINE_MODE` | optional | `dev`/`local` = claude CLI proxy (no API billing) |
 
 ## Notes for Claude Code
 
@@ -79,3 +120,5 @@ pytest tests/
 - Simple, readable code > clever abstractions
 - Every new module comes with tests
 - Commit at every working checkpoint
+- Prompts use XML tags and examples-first structure (per Anthropic context engineering guide)
+- CLI proxy passes prompts via stdin, strips ANTHROPIC_API_KEY from subprocess env
