@@ -6,6 +6,7 @@ set PROJECT_DIR=C:\Users\Topam\Documents\Claude-Sandboxes\Green-Context-Engine-S
 set PIPELINE_MODE=local
 cd /d %PROJECT_DIR%
 call venv\Scripts\activate.bat
+pip install -r requirements.txt --quiet >nul 2>&1
 
 if not exist "logs" mkdir logs
 set TIMESTAMP=%date:~-4%%date:~4,2%%date:~7,2%_%time:~0,2%%time:~3,2%
