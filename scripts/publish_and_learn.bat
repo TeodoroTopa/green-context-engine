@@ -2,7 +2,7 @@
 REM Publish approved drafts to website, then process rejection feedback
 REM to improve future drafts. Run daily in the afternoon via Task Scheduler.
 
-set PROJECT_DIR=C:\Users\Topam\Documents\Mini-Projects\Github\green-context-engine
+set PROJECT_DIR=C:\Users\Topam\Documents\Claude-Sandboxes\Green-Context-Engine-Sandbox\green-context-engine
 set PIPELINE_MODE=local
 cd /d %PROJECT_DIR%
 call venv\Scripts\activate.bat

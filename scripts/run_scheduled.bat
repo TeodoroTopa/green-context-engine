@@ -3,7 +3,7 @@ REM Energy Context Engine — scheduled local run
 REM Set up in Windows Task Scheduler to run daily.
 REM All Claude calls route through claude CLI (no API billing).
 
-set PROJECT_DIR=C:\Users\Topam\Documents\Mini-Projects\Github\green-context-engine
+set PROJECT_DIR=C:\Users\Topam\Documents\Claude-Sandboxes\Green-Context-Engine-Sandbox\green-context-engine
 set LOG_DIR=%PROJECT_DIR%\logs
 set PIPELINE_MODE=local
 

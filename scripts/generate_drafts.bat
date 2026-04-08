@@ -2,7 +2,7 @@
 REM Generate one energy brief per news source for review in Notion.
 REM Run daily in the morning via Windows Task Scheduler.
 
-set PROJECT_DIR=C:\Users\Topam\Documents\Mini-Projects\Github\green-context-engine
+set PROJECT_DIR=C:\Users\Topam\Documents\Claude-Sandboxes\Green-Context-Engine-Sandbox\green-context-engine
 set PIPELINE_MODE=local
 cd /d %PROJECT_DIR%
 call venv\Scripts\activate.bat
