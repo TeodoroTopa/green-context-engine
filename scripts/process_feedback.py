@@ -35,17 +35,20 @@ RULE_EXTRACTION_PROMPT = """\
 You are distilling editorial feedback into a generalized writing rule.
 
 A human editor rejected an AI-generated energy brief and wrote feedback
-explaining why. You have both the rejected draft and the feedback. Your job:
-extract ONE concise, reusable rule that would prevent similar mistakes in
-ANY future brief — not just this specific article.
+explaining why. You have both the rejected draft and the feedback. Extract
+the minimum number of concise, reusable rules that would prevent similar
+mistakes in ANY future brief — not just this specific article.
 
 <guidelines>
-- Make the rule GENERAL, not article-specific. It should apply to all future briefs.
+- Extract as FEW rules as possible — only what the feedback actually calls for.
+  One rule is ideal. Two or three is fine if the feedback raises genuinely
+  distinct issues. Never pad with rules the feedback doesn't support.
+- Make each rule GENERAL, not article-specific. It should apply to all future briefs.
 - Bad: "Don't mention Hurricane Maria in Puerto Rico articles"
 - Good: "Don't reference historical events unless the source article mentions them"
 - Bad: "Indonesia's deforestation should be explained more"
 - Good: "Always explain what drives a trend, not just that the trend exists"
-- Keep it to one sentence, actionable and clear.
+- Keep each rule to one sentence, actionable and clear.
 - Focus on the underlying writing principle, not the specific facts or country involved.
 </guidelines>
 
@@ -58,7 +61,7 @@ Article: {title}
 Editor feedback: {feedback}
 </feedback>
 
-Return JSON only: {{"rule": "one sentence generalized rule"}}
+Return JSON only: {{"rules": ["first rule", "second rule if needed"]}}
 """
 
 
@@ -112,13 +115,17 @@ def main():
             if text.startswith("```"):
                 text = text.split("\n", 1)[1].rsplit("```", 1)[0].strip()
             result = json.loads(text)
-            rule = result.get("rule", "")
-            if rule and rule not in rules:
-                rules.append(rule)
-                new_rules.append(rule)
-                logger.info(f"  New rule: {rule}")
-            elif rule in rules:
-                logger.info(f"  Rule already exists, skipping")
+            extracted = result.get("rules", [])
+            # Handle legacy single-rule format
+            if not extracted and result.get("rule"):
+                extracted = [result["rule"]]
+            for rule in extracted:
+                if rule and rule not in rules:
+                    rules.append(rule)
+                    new_rules.append(rule)
+                    logger.info(f"  New rule: {rule}")
+                elif rule in rules:
+                    logger.info(f"  Rule already exists, skipping")
         except Exception as e:
             logger.warning(f"  Failed to extract rule: {e}")
 
