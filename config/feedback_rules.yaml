@@ -1,0 +1,5 @@
+# Writing rules learned from rejected drafts.
+# Auto-populated by scripts/process_feedback.py when you reject a draft
+# in Notion and add feedback explaining why.
+# You can also edit this file manually to add or remove rules.
+rules: []

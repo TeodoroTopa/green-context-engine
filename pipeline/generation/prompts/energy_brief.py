@@ -70,6 +70,24 @@ incentives to keep building them.
 """
 
 
+def _load_feedback_rules() -> str:
+    """Load learned writing rules from config/feedback_rules.yaml."""
+    from pathlib import Path
+    import yaml
+    rules_path = Path("config/feedback_rules.yaml")
+    if not rules_path.exists():
+        return ""
+    try:
+        config = yaml.safe_load(rules_path.read_text(encoding="utf-8")) or {}
+        rules = config.get("rules", [])
+        if not rules:
+            return ""
+        rules_text = "\n".join(f"- {r}" for r in rules)
+        return f"\n<learned_rules>\nRules from past editorial feedback — follow these:\n{rules_text}\n</learned_rules>\n"
+    except Exception:
+        return ""
+
+
 def build_draft_prompt(enriched) -> str:
     """Build the user message for draft generation.
 
@@ -82,6 +100,8 @@ def build_draft_prompt(enriched) -> str:
     if enriched.story.full_text and len(enriched.story.full_text.split()) > len(enriched.story.summary.split()) + 50:
         article_block = f"\n<article>\n{enriched.story.full_text}\n</article>\n"
 
+    feedback_rules = _load_feedback_rules()
+
     return f"""\
 <story>
 Title: {enriched.story.title}
@@ -89,11 +109,10 @@ Source: {source_name} ({enriched.story.url})
 Summary: {enriched.story.summary}
 </story>
 {article_block}
-
 <data>
 {enriched.data_summary}
 </data>
-
+{feedback_rules}
 Write the brief (200-250 words). Start with YAML frontmatter:
 
 ---
