@@ -41,7 +41,7 @@ no single geographic or policy story the data can ground.
 - Prefer clear geographic entities that exist in the catalog.
 - Return JSON: {{"selected": [0, 3, 7], "reasoning": "..."}}
   (indices into the titles list, best first)
-- Keep your reasoning brief — 1-2 sentences max.
+- Keep your reasoning under 250 words.
 </rules>
 
 <titles>
