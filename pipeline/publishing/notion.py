@@ -253,16 +253,16 @@ class NotionPublisher:
             return []
 
     def get_rejected_feedback(self) -> list[dict]:
-        """Get all rejected pages with their feedback notes.
+        """Get all rejected pages with their feedback notes and draft content.
 
         Returns:
-            List of dicts with keys: title, url, feedback.
+            List of dicts with keys: title, url, feedback, draft_text.
         """
         pages = self.get_pages_by_status("Rejected")
         results = []
         for page in pages:
-            # Fetch full page to get Feedback property
             try:
+                # Fetch page properties for feedback
                 resp = requests.get(
                     f"{NOTION_API}/pages/{page['id']}",
                     headers=self.headers, timeout=15,
@@ -271,11 +271,16 @@ class NotionPublisher:
                 props = resp.json().get("properties", {})
                 feedback_rt = props.get("Feedback", {}).get("rich_text", [])
                 feedback = "".join(item.get("text", {}).get("content", "") for item in feedback_rt)
+
+                # Fetch draft content from page blocks
+                draft_text = self.get_page_content(page["id"])
+
                 if feedback:
                     results.append({
                         "title": page["title"],
                         "url": page.get("url", ""),
                         "feedback": feedback,
+                        "draft_text": draft_text,
                     })
             except requests.RequestException as e:
                 logger.warning(f"Failed to read feedback for {page['title']}: {e}")

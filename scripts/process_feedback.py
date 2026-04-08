@@ -35,20 +35,27 @@ RULE_EXTRACTION_PROMPT = """\
 You are distilling editorial feedback into a generalized writing rule.
 
 A human editor rejected an AI-generated energy brief and wrote feedback
-explaining why. Your job: extract ONE concise, reusable rule that would
-prevent similar mistakes in ANY future brief — not just this specific article.
+explaining why. You have both the rejected draft and the feedback. Your job:
+extract ONE concise, reusable rule that would prevent similar mistakes in
+ANY future brief — not just this specific article.
 
 <guidelines>
 - Make the rule GENERAL, not article-specific. It should apply to all future briefs.
 - Bad: "Don't mention Hurricane Maria in Puerto Rico articles"
 - Good: "Don't reference historical events unless the source article mentions them"
+- Bad: "Indonesia's deforestation should be explained more"
+- Good: "Always explain what drives a trend, not just that the trend exists"
 - Keep it to one sentence, actionable and clear.
-- Focus on the writing principle, not the specific facts involved.
+- Focus on the underlying writing principle, not the specific facts or country involved.
 </guidelines>
+
+<draft>
+{draft_text}
+</draft>
 
 <feedback>
 Article: {title}
-Feedback: {feedback}
+Editor feedback: {feedback}
 </feedback>
 
 Return JSON only: {{"rule": "one sentence generalized rule"}}
@@ -89,7 +96,10 @@ def main():
         logger.info(f"Processing: {title[:60]}")
         logger.info(f"  Feedback: {feedback[:100]}")
 
-        prompt = RULE_EXTRACTION_PROMPT.format(title=title, feedback=feedback)
+        draft_text = rejection.get("draft_text", "")
+        prompt = RULE_EXTRACTION_PROMPT.format(
+            title=title, feedback=feedback, draft_text=draft_text,
+        )
 
         try:
             response = client.messages.create(
