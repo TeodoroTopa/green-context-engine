@@ -12,12 +12,17 @@ def _make_daily_response(year=2025, days=365):
         "daily": {
             "time": dates,
             "shortwave_radiation_sum": [18.0] * days,  # MJ/m2
+            "direct_normal_irradiance": [150.0] * days,  # W/m2 hourly avg
+            "sunshine_duration": [28800.0] * days,  # 8 hours in seconds
             "wind_speed_10m_mean": [12.5] * days,
             "wind_speed_10m_max": [25.0] * days,
+            "wind_speed_100m_mean": [18.0] * days,
+            "wind_speed_100m_max": [35.0] * days,
             "temperature_2m_mean": [22.0] * days,
             "temperature_2m_max": [35.0] * days,
             "temperature_2m_min": [10.0] * days,
             "precipitation_sum": [2.0] * days,
+            "et0_fao_evapotranspiration": [4.5] * days,  # mm/day
         }
     }
 
@@ -49,29 +54,48 @@ def test_fetch_returns_cached(mock_get):
 
 @patch.object(OpenMeteoSource, "fetch", return_value=_make_daily_response())
 def test_get_generation_context_solar_radiation(mock_fetch):
-    """get_generation_context returns solar radiation data."""
+    """get_generation_context returns solar radiation with GHI, DNI, and sunshine."""
     source = OpenMeteoSource()
     result = source.get_generation_context("Indonesia", data_types=["solar_radiation"])
 
     assert result["entity"] == "Indonesia"
     assert result["source"] == "openmeteo"
-    assert "solar_radiation" in result
+    solar = result["solar_radiation"]
     # 18 MJ/m2 / 3.6 = 5.0 kWh/m2/day
-    assert result["solar_radiation"]["avg_daily_kwh_m2"] == 5.0
+    assert solar["avg_daily_ghi_kwh_m2"] == 5.0
+    # DNI: 150 W/m2 / 1000 * 24 = 3.6 kWh/m2/day
+    assert solar["avg_daily_dni_kwh_m2"] == 3.6
+    # Sunshine: 28800 seconds / 3600 = 8.0 hours
+    assert solar["avg_sunshine_hours"] == 8.0
     assert "wind_speed" not in result
 
 
 @patch.object(OpenMeteoSource, "fetch", return_value=_make_daily_response())
 def test_get_generation_context_wind_speed(mock_fetch):
-    """get_generation_context returns wind speed data."""
+    """get_generation_context returns wind speed at 10m and 100m hub height."""
     source = OpenMeteoSource()
     result = source.get_generation_context("Germany", data_types=["wind_speed"])
 
     assert result["entity"] == "Germany"
-    assert "wind_speed" in result
-    assert result["wind_speed"]["avg_10m_kmh"] == 12.5
-    assert result["wind_speed"]["max_10m_kmh"] == 25.0
+    wind = result["wind_speed"]
+    assert wind["avg_10m_kmh"] == 12.5
+    assert wind["max_10m_kmh"] == 25.0
+    assert wind["avg_100m_kmh"] == 18.0
+    assert wind["max_100m_kmh"] == 35.0
     assert "solar_radiation" not in result
+
+
+@patch.object(OpenMeteoSource, "fetch", return_value=_make_daily_response())
+def test_get_generation_context_evapotranspiration(mock_fetch):
+    """get_generation_context returns evapotranspiration data."""
+    source = OpenMeteoSource()
+    result = source.get_generation_context("Brazil", data_types=["evapotranspiration"])
+
+    assert "evapotranspiration" in result
+    et = result["evapotranspiration"]
+    assert et["avg_daily_mm"] == 4.5
+    # 4.5 mm/day * 365 days = 1642.5 mm total
+    assert et["total_mm"] == 1642.5
 
 
 @patch.object(OpenMeteoSource, "fetch", return_value=_make_daily_response())
@@ -84,6 +108,7 @@ def test_get_generation_context_all_types(mock_fetch):
     assert "wind_speed" in result
     assert "temperature" in result
     assert "precipitation" in result
+    assert "evapotranspiration" in result
 
 
 def test_get_generation_context_unknown_country():

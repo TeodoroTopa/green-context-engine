@@ -1,5 +1,7 @@
-# Writing rules learned from rejected drafts.
-# Auto-populated by scripts/process_feedback.py when you reject a draft
-# in Notion and add feedback explaining why.
-# You can also edit this file manually to add or remove rules.
-rules: []
+rules:
+- Do not frame 1–2 year changes in climate-related metrics (e.g., heating or cooling
+  degree days) as trends; short-term shifts reflect weather variability, and climate
+  trends require longer time horizons to establish.
+- Distinguish between electricity demand and total energy demand — heating is often
+  gas-powered while cooling is electric — so seasonal demand peaks differ by energy
+  type, and solar generation offsets only the electricity share.

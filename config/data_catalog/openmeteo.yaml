@@ -8,10 +8,11 @@ connector: pipeline.sources.openmeteo.OpenMeteoSource
 env_key: ""
 
 data_types:
-  - "solar_radiation: average daily solar energy in kWh/m2/day — measures how much sunlight a location receives"
-  - "wind_speed: average and max wind speed at 10m height in km/h"
+  - "solar_radiation: daily solar energy — GHI (kWh/m2/day), DNI for tracking/CSP systems, and sunshine hours per day"
+  - "wind_speed: average and max wind speed at 10m and 100m (turbine hub height) in km/h"
   - "temperature: annual average, max, and min temperature in °C"
   - "precipitation: annual total precipitation in mm"
+  - "evapotranspiration: reference evapotranspiration in mm — relevant for drought, water-energy nexus, and biofuel stories"
 
 selectable: true
 note: >

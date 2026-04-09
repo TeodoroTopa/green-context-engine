@@ -23,6 +23,7 @@ AVAILABLE_DATA_TYPES = [
     "wind_speed",
     "temperature",
     "precipitation",
+    "evapotranspiration",
 ]
 
 # Capital city lat/lng for country-level queries.
@@ -72,10 +73,20 @@ COUNTRY_COORDS = {
 
 # Daily variables grouped by data_type
 _VARIABLES = {
-    "solar_radiation": ["shortwave_radiation_sum"],
-    "wind_speed": ["wind_speed_10m_max", "wind_speed_10m_mean"],
+    "solar_radiation": [
+        "shortwave_radiation_sum",       # GHI (MJ/m2 per day)
+        "direct_normal_irradiance",      # DNI — key for tracking/CSP systems
+        "sunshine_duration",             # seconds of sunshine per day
+    ],
+    "wind_speed": [
+        "wind_speed_10m_max",
+        "wind_speed_10m_mean",
+        "wind_speed_100m_mean",          # hub-height wind speed
+        "wind_speed_100m_max",           # hub-height max gusts
+    ],
     "temperature": ["temperature_2m_mean", "temperature_2m_max", "temperature_2m_min"],
     "precipitation": ["precipitation_sum"],
+    "evapotranspiration": ["et0_fao_evapotranspiration"],
 }
 
 
@@ -149,24 +160,48 @@ class OpenMeteoSource(BaseSource):
                 # Convert from MJ/m2 (daily sum) to kWh/m2/day
                 avg_mj = sum(values) / len(values)
                 avg_kwh = avg_mj / 3.6
-                result["solar_radiation"] = {
-                    "avg_daily_kwh_m2": round(avg_kwh, 2),
-                    "avg_daily_mj_m2": round(avg_mj, 2),
+                solar = {
+                    "avg_daily_ghi_kwh_m2": round(avg_kwh, 2),
                     "days_measured": len(values),
                 }
+                # DNI (direct normal irradiance) — W/m2 hourly avg, sum to daily
+                if "direct_normal_irradiance" in daily:
+                    dni_vals = [v for v in daily["direct_normal_irradiance"] if v is not None]
+                    if dni_vals:
+                        # Hourly W/m2 averaged over the day → convert to kWh/m2/day
+                        avg_dni_wm2 = sum(dni_vals) / len(dni_vals)
+                        solar["avg_daily_dni_kwh_m2"] = round(avg_dni_wm2 / 1000 * 24, 2)
+                # Sunshine duration (seconds → hours)
+                if "sunshine_duration" in daily:
+                    sun_vals = [v for v in daily["sunshine_duration"] if v is not None]
+                    if sun_vals:
+                        solar["avg_sunshine_hours"] = round(
+                            sum(sun_vals) / len(sun_vals) / 3600, 1
+                        )
+                result["solar_radiation"] = solar
 
         if "wind_speed" in requested:
+            wind = {"days_measured": 0}
             if "wind_speed_10m_mean" in daily:
                 values = [v for v in daily["wind_speed_10m_mean"] if v is not None]
                 if values:
-                    result["wind_speed"] = {
-                        "avg_10m_kmh": round(sum(values) / len(values), 1),
-                        "days_measured": len(values),
-                    }
+                    wind["avg_10m_kmh"] = round(sum(values) / len(values), 1)
+                    wind["days_measured"] = len(values)
             if "wind_speed_10m_max" in daily:
                 maxes = [v for v in daily["wind_speed_10m_max"] if v is not None]
-                if maxes and "wind_speed" in result:
-                    result["wind_speed"]["max_10m_kmh"] = round(max(maxes), 1)
+                if maxes:
+                    wind["max_10m_kmh"] = round(max(maxes), 1)
+            # Hub-height (100m) wind — what matters for wind turbines
+            if "wind_speed_100m_mean" in daily:
+                values = [v for v in daily["wind_speed_100m_mean"] if v is not None]
+                if values:
+                    wind["avg_100m_kmh"] = round(sum(values) / len(values), 1)
+            if "wind_speed_100m_max" in daily:
+                maxes = [v for v in daily["wind_speed_100m_max"] if v is not None]
+                if maxes:
+                    wind["max_100m_kmh"] = round(max(maxes), 1)
+            if wind.get("days_measured", 0) > 0:
+                result["wind_speed"] = wind
 
         if "temperature" in requested and "temperature_2m_mean" in daily:
             values = [v for v in daily["temperature_2m_mean"] if v is not None]
@@ -185,6 +220,15 @@ class OpenMeteoSource(BaseSource):
             if values:
                 result["precipitation"] = {
                     "total_mm": round(sum(values), 1),
+                    "days_measured": len(values),
+                }
+
+        if "evapotranspiration" in requested and "et0_fao_evapotranspiration" in daily:
+            values = [v for v in daily["et0_fao_evapotranspiration"] if v is not None]
+            if values:
+                result["evapotranspiration"] = {
+                    "total_mm": round(sum(values), 1),
+                    "avg_daily_mm": round(sum(values) / len(values), 2),
                     "days_measured": len(values),
                 }
 

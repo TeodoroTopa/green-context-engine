@@ -22,6 +22,7 @@ BASE_URL = "https://api.carbonintensity.org.uk"
 AVAILABLE_DATA_TYPES = [
     "carbon_intensity",
     "generation_mix",
+    "intensity_trend",
 ]
 
 # Entities this source can serve
@@ -95,5 +96,21 @@ class UKCarbonSource(BaseSource):
                     for item in mix
                     if item.get("perc", 0) > 0
                 ]
+
+        if "intensity_trend" in requested:
+            week_ago = (datetime.now() - timedelta(days=8)).strftime("%Y-%m-%dT00:00Z")
+            yesterday_end = f"{yesterday}T23:59Z"
+            data = self.fetch(f"/intensity/stats/{week_ago}/{yesterday_end}")
+            stats = data.get("data", [])
+            if stats and len(stats) > 0:
+                entry = stats[0]
+                intensity = entry.get("intensity", {})
+                if intensity:
+                    result["intensity_trend"] = {
+                        "period_days": 7,
+                        "avg_gco2_kwh": intensity.get("average"),
+                        "max_gco2_kwh": intensity.get("max"),
+                        "min_gco2_kwh": intensity.get("min"),
+                    }
 
         return result

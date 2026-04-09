@@ -108,6 +108,29 @@ def test_get_generation_context_non_uk_entity():
     assert result == {}
 
 
+@patch.object(UKCarbonSource, "fetch")
+def test_get_generation_context_intensity_trend(mock_fetch):
+    """get_generation_context returns 7-day intensity trend."""
+    mock_fetch.return_value = {
+        "data": [
+            {
+                "from": "2025-04-01T00:00Z",
+                "to": "2025-04-07T23:59Z",
+                "intensity": {"max": 250, "average": 180, "min": 90, "index": "moderate"},
+            }
+        ]
+    }
+    source = UKCarbonSource()
+    result = source.get_generation_context("UK", data_types=["intensity_trend"])
+
+    assert "intensity_trend" in result
+    trend = result["intensity_trend"]
+    assert trend["period_days"] == 7
+    assert trend["avg_gco2_kwh"] == 180
+    assert trend["max_gco2_kwh"] == 250
+    assert trend["min_gco2_kwh"] == 90
+
+
 def test_get_generation_context_uk_aliases():
     """Various UK aliases are accepted."""
     source = UKCarbonSource()
