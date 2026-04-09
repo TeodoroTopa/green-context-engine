@@ -122,3 +122,12 @@ pytest tests/
 - Commit at every working checkpoint
 - Prompts use XML tags and examples-first structure (per Anthropic context engineering guide)
 - CLI proxy passes prompts via stdin, strips ANTHROPIC_API_KEY from subprocess env
+
+## Autonomous Work
+
+When working autonomously (scheduled tasks, CodeMachine workflows, unattended sessions), follow the rules in `.claude/rules/autonomous-work.md`. Key points:
+
+- **Never push to main.** Always use dev branches and open PRs.
+- **Self-contained only.** Don't start work requiring API keys you don't have.
+- **Document research** in `docs/research/` as markdown files.
+- **Run tests** after every change — all must pass before committing.

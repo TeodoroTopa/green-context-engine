@@ -35,3 +35,12 @@ Thumbs.db
 .pytest_cache/
 .coverage
 htmlcov/
+
+# CodeMachine orchestration (local workflow configs, not project code)
+.codemachine/
+
+# Autonomous research output (reviewed via PRs, not committed to main)
+docs/research/
+
+# Claude Code local settings (contains hooks, permissions — machine-specific)
+.claude/settings.local.json
