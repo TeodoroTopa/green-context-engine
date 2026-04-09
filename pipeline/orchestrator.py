@@ -27,6 +27,8 @@ from pipeline.sources.ember import EmberSource
 from pipeline.sources.gfw import GFWSource
 from pipeline.sources.iucn import IUCNSource
 from pipeline.sources.noaa import NOAASource
+from pipeline.sources.openmeteo import OpenMeteoSource
+from pipeline.sources.uk_carbon import UKCarbonSource
 from pipeline.usage import UsageTracker
 
 logger = logging.getLogger(__name__)
@@ -68,6 +70,12 @@ class Pipeline:
         if noaa_key:
             sources["noaa"] = NOAASource(api_key=noaa_key)
             logger.info("NOAA source enabled")
+
+        # Free sources — no API key needed, always enabled
+        sources["openmeteo"] = OpenMeteoSource()
+        logger.info("Open-Meteo source enabled")
+        sources["uk_carbon"] = UKCarbonSource()
+        logger.info("UK Carbon Intensity source enabled")
 
         self.enricher = Enricher(sources, self.client)
         self.drafter = Drafter(self.client)

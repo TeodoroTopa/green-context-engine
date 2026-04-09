@@ -21,3 +21,11 @@ eia:
   endpoints:
     us_generation: electricity/electric-power-operational-data/data
     international: international/data
+
+openmeteo:
+  base_url: https://archive-api.open-meteo.com/v1
+  cache_ttl: 86400  # 24 hours — historical data doesn't change
+
+uk_carbon:
+  base_url: https://api.carbonintensity.org.uk
+  cache_ttl: 3600  # 1 hour — data updates every 30 min

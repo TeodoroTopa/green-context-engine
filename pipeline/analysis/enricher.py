@@ -339,15 +339,59 @@ class Enricher:
 
             # NOAA: monthly data (fallback)
             temp = context.get("temperature", [])
-            if temp:
+            if temp and isinstance(temp, list):
                 lines.append("Monthly temperature (NOAA):")
                 for r in temp[:6]:
                     lines.append(f"  {r['date']} {r['type']}: {r['value_celsius']}°C")
             precip = context.get("precipitation", [])
-            if precip:
+            if precip and isinstance(precip, list):
                 lines.append("Monthly precipitation (NOAA):")
                 for r in precip[:6]:
                     lines.append(f"  {r['date']}: {r['value_mm']} mm")
+
+            # Open-Meteo: solar radiation
+            solar = context.get("solar_radiation", {})
+            if solar and isinstance(solar, dict):
+                kwh = solar.get("avg_daily_kwh_m2", "?")
+                year = context.get("year", "")
+                lines.append(f"Solar resource ({year}, Open-Meteo): {kwh} kWh/m²/day average")
+
+            # Open-Meteo: wind speed
+            wind = context.get("wind_speed", {})
+            if wind and isinstance(wind, dict):
+                avg = wind.get("avg_10m_kmh", "?")
+                year = context.get("year", "")
+                lines.append(f"Wind speed at 10m ({year}, Open-Meteo): {avg} km/h average")
+
+            # Open-Meteo: temperature (dict format, not NOAA list format)
+            om_temp = context.get("temperature", {})
+            if om_temp and isinstance(om_temp, dict) and "avg_c" in om_temp:
+                year = context.get("year", "")
+                lines.append(f"Average temperature ({year}, Open-Meteo): {om_temp['avg_c']}°C")
+
+            # Open-Meteo: precipitation (dict format)
+            om_precip = context.get("precipitation", {})
+            if om_precip and isinstance(om_precip, dict) and "total_mm" in om_precip:
+                year = context.get("year", "")
+                lines.append(f"Annual precipitation ({year}, Open-Meteo): {om_precip['total_mm']} mm")
+
+            # UK Carbon Intensity: daily carbon intensity
+            uk_ci = context.get("carbon_intensity", {})
+            if uk_ci and isinstance(uk_ci, dict) and "avg_gco2_kwh" in uk_ci:
+                date = context.get("date", "")
+                lines.append(
+                    f"UK grid carbon intensity ({date}, UK Carbon Intensity API): "
+                    f"{uk_ci['avg_gco2_kwh']} gCO2/kWh avg, "
+                    f"{uk_ci['min_gco2_kwh']}-{uk_ci['max_gco2_kwh']} range"
+                )
+
+            # UK Carbon Intensity: generation mix
+            uk_mix = context.get("generation_mix", [])
+            if uk_mix and isinstance(uk_mix, list) and uk_mix and isinstance(uk_mix[0], dict) and "fuel" in uk_mix[0]:
+                date = context.get("date", "")
+                lines.append(f"UK generation mix ({date}, UK Carbon Intensity API):")
+                for item in sorted(uk_mix, key=lambda x: x.get("perc", 0), reverse=True):
+                    lines.append(f"  {item['fuel']}: {item['perc']}%")
 
             parts.append("\n".join(lines))
         return "\n\n".join(parts)
