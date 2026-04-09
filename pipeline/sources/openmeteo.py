@@ -71,18 +71,16 @@ COUNTRY_COORDS = {
     "Puerto Rico": (18.47, -66.12),
 }
 
-# Daily variables grouped by data_type
+# Daily variables grouped by data_type.
+# Note: 100m wind and DNI are hourly-only; daily API uses different names.
 _VARIABLES = {
     "solar_radiation": [
         "shortwave_radiation_sum",       # GHI (MJ/m2 per day)
-        "direct_normal_irradiance",      # DNI — key for tracking/CSP systems
         "sunshine_duration",             # seconds of sunshine per day
     ],
     "wind_speed": [
         "wind_speed_10m_max",
-        "wind_speed_10m_mean",
-        "wind_speed_100m_mean",          # hub-height wind speed
-        "wind_speed_100m_max",           # hub-height max gusts
+        "mean_wind_speed_10m",           # daily mean (note: different name pattern)
     ],
     "temperature": ["temperature_2m_mean", "temperature_2m_max", "temperature_2m_min"],
     "precipitation": ["precipitation_sum"],
@@ -164,13 +162,6 @@ class OpenMeteoSource(BaseSource):
                     "avg_daily_ghi_kwh_m2": round(avg_kwh, 2),
                     "days_measured": len(values),
                 }
-                # DNI (direct normal irradiance) — W/m2 hourly avg, sum to daily
-                if "direct_normal_irradiance" in daily:
-                    dni_vals = [v for v in daily["direct_normal_irradiance"] if v is not None]
-                    if dni_vals:
-                        # Hourly W/m2 averaged over the day → convert to kWh/m2/day
-                        avg_dni_wm2 = sum(dni_vals) / len(dni_vals)
-                        solar["avg_daily_dni_kwh_m2"] = round(avg_dni_wm2 / 1000 * 24, 2)
                 # Sunshine duration (seconds → hours)
                 if "sunshine_duration" in daily:
                     sun_vals = [v for v in daily["sunshine_duration"] if v is not None]
@@ -182,8 +173,8 @@ class OpenMeteoSource(BaseSource):
 
         if "wind_speed" in requested:
             wind = {"days_measured": 0}
-            if "wind_speed_10m_mean" in daily:
-                values = [v for v in daily["wind_speed_10m_mean"] if v is not None]
+            if "mean_wind_speed_10m" in daily:
+                values = [v for v in daily["mean_wind_speed_10m"] if v is not None]
                 if values:
                     wind["avg_10m_kmh"] = round(sum(values) / len(values), 1)
                     wind["days_measured"] = len(values)
@@ -191,15 +182,8 @@ class OpenMeteoSource(BaseSource):
                 maxes = [v for v in daily["wind_speed_10m_max"] if v is not None]
                 if maxes:
                     wind["max_10m_kmh"] = round(max(maxes), 1)
-            # Hub-height (100m) wind — what matters for wind turbines
-            if "wind_speed_100m_mean" in daily:
-                values = [v for v in daily["wind_speed_100m_mean"] if v is not None]
-                if values:
-                    wind["avg_100m_kmh"] = round(sum(values) / len(values), 1)
-            if "wind_speed_100m_max" in daily:
-                maxes = [v for v in daily["wind_speed_100m_max"] if v is not None]
-                if maxes:
-                    wind["max_100m_kmh"] = round(max(maxes), 1)
+                    if not wind.get("days_measured"):
+                        wind["days_measured"] = len(maxes)
             if wind.get("days_measured", 0) > 0:
                 result["wind_speed"] = wind
 

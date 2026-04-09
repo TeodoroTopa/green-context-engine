@@ -12,12 +12,9 @@ def _make_daily_response(year=2025, days=365):
         "daily": {
             "time": dates,
             "shortwave_radiation_sum": [18.0] * days,  # MJ/m2
-            "direct_normal_irradiance": [150.0] * days,  # W/m2 hourly avg
             "sunshine_duration": [28800.0] * days,  # 8 hours in seconds
-            "wind_speed_10m_mean": [12.5] * days,
+            "mean_wind_speed_10m": [12.5] * days,
             "wind_speed_10m_max": [25.0] * days,
-            "wind_speed_100m_mean": [18.0] * days,
-            "wind_speed_100m_max": [35.0] * days,
             "temperature_2m_mean": [22.0] * days,
             "temperature_2m_max": [35.0] * days,
             "temperature_2m_min": [10.0] * days,
@@ -63,8 +60,6 @@ def test_get_generation_context_solar_radiation(mock_fetch):
     solar = result["solar_radiation"]
     # 18 MJ/m2 / 3.6 = 5.0 kWh/m2/day
     assert solar["avg_daily_ghi_kwh_m2"] == 5.0
-    # DNI: 150 W/m2 / 1000 * 24 = 3.6 kWh/m2/day
-    assert solar["avg_daily_dni_kwh_m2"] == 3.6
     # Sunshine: 28800 seconds / 3600 = 8.0 hours
     assert solar["avg_sunshine_hours"] == 8.0
     assert "wind_speed" not in result
@@ -80,8 +75,6 @@ def test_get_generation_context_wind_speed(mock_fetch):
     wind = result["wind_speed"]
     assert wind["avg_10m_kmh"] == 12.5
     assert wind["max_10m_kmh"] == 25.0
-    assert wind["avg_100m_kmh"] == 18.0
-    assert wind["max_100m_kmh"] == 35.0
     assert "solar_radiation" not in result
 
 

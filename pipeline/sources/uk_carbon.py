@@ -89,12 +89,25 @@ class UKCarbonSource(BaseSource):
         if "generation_mix" in requested:
             data = self.fetch(f"/generation/{yesterday}/pt24h")
             gen_data = data.get("data", {})
-            mix = gen_data.get("generationmix", [])
+            # Response can be a dict with "generationmix" or a list of periods
+            mix = []
+            if isinstance(gen_data, dict):
+                mix = gen_data.get("generationmix", [])
+            elif isinstance(gen_data, list) and gen_data:
+                # Average generation mix across all half-hour periods
+                fuel_totals: dict[str, list[float]] = {}
+                for period in gen_data:
+                    for item in period.get("generationmix", []):
+                        fuel = item.get("fuel", "")
+                        perc = item.get("perc", 0) or 0
+                        fuel_totals.setdefault(fuel, []).append(perc)
+                mix = [
+                    {"fuel": fuel, "perc": round(sum(vals) / len(vals), 1)}
+                    for fuel, vals in fuel_totals.items()
+                ]
             if mix:
                 result["generation_mix"] = [
-                    {"fuel": item["fuel"], "perc": item["perc"]}
-                    for item in mix
-                    if item.get("perc", 0) > 0
+                    item for item in mix if item.get("perc", 0) > 0
                 ]
 
         if "intensity_trend" in requested:

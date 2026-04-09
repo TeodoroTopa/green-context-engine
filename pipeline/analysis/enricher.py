@@ -372,30 +372,22 @@ class Enricher:
 
             # Open-Meteo: solar radiation
             solar = context.get("solar_radiation", {})
-            if solar and isinstance(solar, dict):
+            if solar and isinstance(solar, dict) and "avg_daily_ghi_kwh_m2" in solar:
                 year = context.get("year", "")
                 ghi = solar.get("avg_daily_ghi_kwh_m2", "?")
                 lines.append(f"Solar resource GHI ({year}, Open-Meteo): {ghi} kWh/m²/day average")
-                dni = solar.get("avg_daily_dni_kwh_m2")
-                if dni:
-                    lines.append(f"Solar resource DNI ({year}, Open-Meteo): {dni} kWh/m²/day — direct beam for tracking systems")
                 sun_hrs = solar.get("avg_sunshine_hours")
                 if sun_hrs:
                     lines.append(f"Average sunshine: {sun_hrs} hours/day ({year}, Open-Meteo)")
 
             # Open-Meteo: wind speed
             wind = context.get("wind_speed", {})
-            if wind and isinstance(wind, dict):
+            if wind and isinstance(wind, dict) and "avg_10m_kmh" in wind:
                 year = context.get("year", "")
-                # Prefer 100m (hub height) if available
-                avg_100 = wind.get("avg_100m_kmh")
-                if avg_100:
-                    max_100 = wind.get("max_100m_kmh", "")
-                    max_str = f", max {max_100} km/h" if max_100 else ""
-                    lines.append(f"Wind speed at hub height 100m ({year}, Open-Meteo): {avg_100} km/h average{max_str}")
                 avg_10 = wind.get("avg_10m_kmh")
-                if avg_10:
-                    lines.append(f"Wind speed at 10m ({year}, Open-Meteo): {avg_10} km/h average")
+                max_10 = wind.get("max_10m_kmh")
+                max_str = f", max gust {max_10} km/h" if max_10 else ""
+                lines.append(f"Wind speed at 10m ({year}, Open-Meteo): {avg_10} km/h average{max_str}")
 
             # Open-Meteo: temperature (dict format, not NOAA list format)
             om_temp = context.get("temperature", {})
