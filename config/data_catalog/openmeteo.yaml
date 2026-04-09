@@ -8,7 +8,7 @@ connector: pipeline.sources.openmeteo.OpenMeteoSource
 env_key: ""
 
 data_types:
-  - "solar_radiation: daily solar energy — GHI (kWh/m2/day) and sunshine hours per day"
+  - "solar_radiation: GHI (total global horizontal irradiance, kWh/m2/day) and sunshine hours per day (hours when direct irradiance exceeds 120 W/m2, per WMO definition — NOT the same as daylight hours; clouds, haze, and monsoon reduce sunshine well below sunrise-to-sunset)"
   - "wind_speed: average and max wind speed at 10m in km/h"
   - "temperature: annual average, max, and min temperature in °C"
   - "precipitation: annual total precipitation in mm"
@@ -22,6 +22,10 @@ note: >
   how much sunlight the location receives. A story about wind power should
   include wind_speed. Temperature and precipitation are available but NOAA may
   be preferred when heating/cooling degree days are more relevant.
+  IMPORTANT for the drafter: sunshine hours measure actual direct sunshine, not
+  total daylight. A location with 14 hours between sunrise and sunset may average
+  only 8-10 hours of sunshine due to cloud cover. If citing sunshine hours, always
+  clarify this distinction so readers do not confuse it with daylight duration.
 
 entities:
   major_economies:
