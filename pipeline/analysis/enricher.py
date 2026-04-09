@@ -339,15 +339,106 @@ class Enricher:
 
             # NOAA: monthly data (fallback)
             temp = context.get("temperature", [])
-            if temp:
+            if temp and isinstance(temp, list):
                 lines.append("Monthly temperature (NOAA):")
                 for r in temp[:6]:
                     lines.append(f"  {r['date']} {r['type']}: {r['value_celsius']}°C")
             precip = context.get("precipitation", [])
-            if precip:
+            if precip and isinstance(precip, list):
                 lines.append("Monthly precipitation (NOAA):")
                 for r in precip[:6]:
                     lines.append(f"  {r['date']}: {r['value_mm']} mm")
+
+            # NLR: solar resource data (US)
+            nlr_solar = context.get("solar_resource", {})
+            if nlr_solar and isinstance(nlr_solar, dict) and "avg_ghi" in nlr_solar:
+                ghi = nlr_solar["avg_ghi"].get("annual", "?")
+                dni = nlr_solar["avg_dni"].get("annual", "?")
+                tilt = nlr_solar["avg_lat_tilt"].get("annual", "?")
+                lines.append(
+                    f"Solar resource (NLR): GHI {ghi} kWh/m²/day, "
+                    f"DNI {dni} kWh/m²/day, tilt-at-latitude {tilt} kWh/m²/day"
+                )
+
+            # NLR: PVWatts production estimate (US)
+            pvwatts = context.get("pvwatts_estimate", {})
+            if pvwatts and isinstance(pvwatts, dict) and "ac_annual_kwh" in pvwatts:
+                annual_mwh = pvwatts["ac_annual_kwh"] / 1000
+                cf = pvwatts.get("capacity_factor_pct", "?")
+                lines.append(
+                    f"PVWatts estimate for 1 MW reference system (NLR): "
+                    f"{annual_mwh:,.0f} MWh/year, {cf}% capacity factor"
+                )
+
+            # Open-Meteo: solar radiation
+            solar = context.get("solar_radiation", {})
+            if solar and isinstance(solar, dict) and "avg_daily_ghi_kwh_m2" in solar:
+                year = context.get("year", "")
+                ghi = solar.get("avg_daily_ghi_kwh_m2", "?")
+                lines.append(f"Solar resource GHI ({year}, Open-Meteo): {ghi} kWh/m²/day average")
+                sun_hrs = solar.get("avg_sunshine_hours")
+                if sun_hrs:
+                    lines.append(f"Average sunshine: {sun_hrs} hours/day ({year}, Open-Meteo)")
+
+            # Open-Meteo: wind speed
+            wind = context.get("wind_speed", {})
+            if wind and isinstance(wind, dict) and "avg_10m_kmh" in wind:
+                year = context.get("year", "")
+                avg_10 = wind.get("avg_10m_kmh")
+                max_10 = wind.get("max_10m_kmh")
+                max_str = f", max gust {max_10} km/h" if max_10 else ""
+                lines.append(f"Wind speed at 10m ({year}, Open-Meteo): {avg_10} km/h average{max_str}")
+
+            # Open-Meteo: temperature (dict format, not NOAA list format)
+            om_temp = context.get("temperature", {})
+            if om_temp and isinstance(om_temp, dict) and "avg_c" in om_temp:
+                year = context.get("year", "")
+                lines.append(f"Average temperature ({year}, Open-Meteo): {om_temp['avg_c']}°C")
+
+            # Open-Meteo: precipitation (dict format)
+            om_precip = context.get("precipitation", {})
+            if om_precip and isinstance(om_precip, dict) and "total_mm" in om_precip:
+                year = context.get("year", "")
+                lines.append(f"Annual precipitation ({year}, Open-Meteo): {om_precip['total_mm']} mm")
+
+            # Open-Meteo: evapotranspiration
+            et = context.get("evapotranspiration", {})
+            if et and isinstance(et, dict):
+                year = context.get("year", "")
+                total = et.get("total_mm", "?")
+                avg = et.get("avg_daily_mm", "?")
+                lines.append(
+                    f"Reference evapotranspiration ({year}, Open-Meteo): "
+                    f"{total} mm/year ({avg} mm/day avg)"
+                )
+
+            # UK Carbon Intensity: daily carbon intensity
+            uk_ci = context.get("carbon_intensity", {})
+            if uk_ci and isinstance(uk_ci, dict) and "avg_gco2_kwh" in uk_ci:
+                date = context.get("date", "")
+                lines.append(
+                    f"UK grid carbon intensity ({date}, UK Carbon Intensity API): "
+                    f"{uk_ci['avg_gco2_kwh']} gCO2/kWh avg, "
+                    f"{uk_ci['min_gco2_kwh']}-{uk_ci['max_gco2_kwh']} range"
+                )
+
+            # UK Carbon Intensity: generation mix
+            uk_mix = context.get("generation_mix", [])
+            if uk_mix and isinstance(uk_mix, list) and uk_mix and isinstance(uk_mix[0], dict) and "fuel" in uk_mix[0]:
+                date = context.get("date", "")
+                lines.append(f"UK generation mix ({date}, UK Carbon Intensity API):")
+                for item in sorted(uk_mix, key=lambda x: x.get("perc", 0), reverse=True):
+                    lines.append(f"  {item['fuel']}: {item['perc']}%")
+
+            # UK Carbon Intensity: 7-day trend
+            trend = context.get("intensity_trend", {})
+            if trend and isinstance(trend, dict) and "avg_gco2_kwh" in trend:
+                days = trend.get("period_days", 7)
+                lines.append(
+                    f"UK carbon intensity {days}-day trend (UK Carbon Intensity API): "
+                    f"avg {trend['avg_gco2_kwh']} gCO2/kWh, "
+                    f"range {trend['min_gco2_kwh']}-{trend['max_gco2_kwh']}"
+                )
 
             parts.append("\n".join(lines))
         return "\n\n".join(parts)

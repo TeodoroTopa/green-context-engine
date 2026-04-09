@@ -1,0 +1,75 @@
+source: openmeteo
+description: >
+  Open-Meteo historical weather API — solar radiation, wind speed, temperature,
+  and precipitation data at 10km resolution for any location on Earth. Data from
+  ERA5 reanalysis, updated daily. Use for solar/wind resource context in energy
+  stories. This is weather and resource data, not electricity generation data.
+connector: pipeline.sources.openmeteo.OpenMeteoSource
+env_key: ""
+
+data_types:
+  - "solar_radiation: GHI (total global horizontal irradiance, kWh/m2/day) and sunshine hours per day (hours when direct irradiance exceeds 120 W/m2, per WMO definition — NOT the same as daylight hours; clouds, haze, and monsoon reduce sunshine well below sunrise-to-sunset)"
+  - "wind_speed: average and max wind speed at 10m in km/h"
+  - "temperature: annual average, max, and min temperature in °C"
+  - "precipitation: annual total precipitation in mm"
+  - "evapotranspiration: reference evapotranspiration in mm — relevant for drought, water-energy nexus, and biofuel stories"
+
+selectable: true
+note: >
+  The strategist should request this source when a story involves solar or wind
+  energy projects and location-specific resource data would add context. For
+  example, a story about a new solar farm should include solar_radiation to show
+  how much sunlight the location receives. A story about wind power should
+  include wind_speed. Temperature and precipitation are available but NOAA may
+  be preferred when heating/cooling degree days are more relevant.
+  Data is based on capital-city coordinates as a proxy for country-level values.
+  Solar and wind conditions vary within large countries — the drafter should note
+  that figures represent conditions near the capital, not a national average.
+  IMPORTANT for the drafter: sunshine hours measure actual direct sunshine, not
+  total daylight. A location with 14 hours between sunrise and sunset may average
+  only 8-10 hours of sunshine due to cloud cover. If citing sunshine hours, always
+  clarify this distinction so readers do not confuse it with daylight duration.
+
+entities:
+  major_economies:
+    - United States
+    - China
+    - India
+    - Germany
+    - Japan
+    - United Kingdom
+    - France
+    - Brazil
+    - Canada
+    - Australia
+    - South Korea
+    - Russia
+    - Italy
+    - Spain
+    - Mexico
+  energy_relevant:
+    - Indonesia
+    - Saudi Arabia
+    - Nigeria
+    - South Africa
+    - Colombia
+    - Argentina
+    - Chile
+    - Norway
+    - Sweden
+    - Thailand
+    - Viet Nam
+    - Philippines
+    - Egypt
+    - Kenya
+    - Greece
+    - Turkey
+    - Poland
+    - Netherlands
+    - Portugal
+    - Morocco
+    - Pakistan
+    - Bangladesh
+    - Malaysia
+    - Peru
+    - Puerto Rico

@@ -1,0 +1,25 @@
+source: uk_carbon
+description: >
+  UK Carbon Intensity API from the National Energy System Operator (NESO).
+  Provides real-time and daily carbon intensity (gCO2/kWh) and generation mix
+  by fuel type for Great Britain at 30-minute resolution. Use for UK-specific
+  energy stories — provides much more granular data than Ember's yearly figures.
+  GB-only coverage (England, Scotland, Wales — not Northern Ireland).
+connector: pipeline.sources.uk_carbon.UKCarbonSource
+env_key: ""
+
+data_types:
+  - "carbon_intensity: daily average, max, and min carbon intensity in gCO2/kWh for the GB grid"
+  - "generation_mix: percentage breakdown of electricity generation by fuel type (gas, wind, nuclear, solar, coal, hydro, biomass, imports)"
+  - "intensity_trend: 7-day average, max, and min carbon intensity — shows whether the UK grid is getting cleaner or dirtier"
+
+selectable: true
+note: >
+  Only use this source when the story is specifically about the UK, Great Britain,
+  or England/Scotland/Wales. Returns empty for non-UK entities. Provides yesterday's
+  data (most recent complete day). The generation_mix shows actual fuel percentages,
+  complementing Ember's yearly TWh figures with daily granularity.
+
+entities:
+  countries:
+    - United Kingdom

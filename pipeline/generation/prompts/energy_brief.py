@@ -88,6 +88,54 @@ def _load_feedback_rules() -> str:
         return ""
 
 
+DATA_SOURCE_URLS = {
+    "ember": "https://ember-energy.org",
+    "eia": "https://www.eia.gov",
+    "gfw": "https://www.globalforestwatch.org",
+    "noaa": "https://www.noaa.gov",
+    "iucn": "https://www.iucnredlist.org",
+    "nlr": "https://developer.nlr.gov",
+    "openmeteo": "https://open-meteo.com",
+    "uk_carbon": "https://carbonintensity.org.uk",
+}
+
+DATA_SOURCE_NAMES = {
+    "ember": "Ember",
+    "eia": "EIA",
+    "gfw": "Global Forest Watch",
+    "noaa": "NOAA",
+    "iucn": "IUCN Red List",
+    "nlr": "NLR",
+    "openmeteo": "Open-Meteo",
+    "uk_carbon": "UK Carbon Intensity API",
+}
+
+
+def _build_sources_yaml(enriched) -> str:
+    """Build the sources YAML block from the article source + data sources used."""
+    source_name = enriched.story.source.capitalize() if enriched.story.source else "Source"
+    lines = [
+        f"  - name: {source_name}",
+        f"    url: {enriched.story.url}",
+    ]
+    # Collect unique data sources from the fetch plan
+    seen = set()
+    for fetch in enriched.fetch_plan.get("fetches", []):
+        src = fetch.get("source", "")
+        if src and src not in seen:
+            seen.add(src)
+            display = DATA_SOURCE_NAMES.get(src, src.capitalize())
+            url = DATA_SOURCE_URLS.get(src, "")
+            if url:
+                lines.append(f"  - name: {display}")
+                lines.append(f"    url: {url}")
+    # Fallback: if no fetch plan, at least include Ember
+    if not seen:
+        lines.append("  - name: Ember")
+        lines.append("    url: https://ember-energy.org")
+    return "\n".join(lines)
+
+
 def build_draft_prompt(enriched) -> str:
     """Build the user message for draft generation.
 
@@ -101,6 +149,7 @@ def build_draft_prompt(enriched) -> str:
         article_block = f"\n<article>\n{enriched.story.full_text}\n</article>\n"
 
     feedback_rules = _load_feedback_rules()
+    sources_yaml = _build_sources_yaml(enriched)
 
     return f"""\
 <story>
@@ -119,10 +168,7 @@ Write the brief (200-250 words). Start with YAML frontmatter:
 title: "..."
 date: {enriched.story.published or "YYYY-MM-DD"}
 sources:
-  - name: {source_name}
-    url: {enriched.story.url}
-  - name: Ember
-    url: https://ember-energy.org
+{sources_yaml}
 status: draft
 ---
 

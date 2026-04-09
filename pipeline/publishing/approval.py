@@ -32,11 +32,44 @@ def _get_github_token() -> str | None:
     return os.getenv("WEBSITE_GITHUB_TOKEN")
 
 
+def _find_existing_by_slug(slug: str, headers: dict) -> dict | None:
+    """Check if a file with the same slug already exists in content/energy/.
+
+    Filenames are {date}_{slug}.md. A story re-drafted on a different day
+    gets a different date prefix but the same slug, so we match on slug only.
+
+    Returns:
+        Dict with 'path', 'sha', 'name' if found, None otherwise.
+    """
+    try:
+        resp = requests.get(
+            f"{GITHUB_API}/repos/{WEBSITE_REPO}/contents/{WEBSITE_CONTENT_PATH}",
+            headers=headers,
+            timeout=15,
+        )
+        if resp.status_code != 200:
+            return None
+        for item in resp.json():
+            name = item.get("name", "")
+            # Strip date prefix (YYYY-MM-DD_) and extension (.md) to get slug
+            if name.endswith(".md") and "_" in name:
+                existing_slug = name.split("_", 1)[1].removesuffix(".md")
+                if existing_slug == slug:
+                    return {"path": item["path"], "sha": item["sha"], "name": name}
+    except requests.RequestException:
+        pass
+    return None
+
+
 def publish_to_website(title: str, markdown: str, date_str: str = "") -> dict:
     """Publish a markdown post directly to main on the website repo.
 
     Commits the file to content/energy/ on main, which triggers
     an automatic Vercel rebuild. Post goes live within ~60 seconds.
+
+    Deduplicates by slug: if a file with the same slugified title already
+    exists (regardless of date prefix), it updates that file in place
+    rather than creating a duplicate.
 
     Args:
         title: The post title.
@@ -71,7 +104,7 @@ def publish_to_website(title: str, markdown: str, date_str: str = "") -> dict:
             "branch": "main",
         }
 
-        # Check if file already exists (need its SHA to update)
+        # Check if exact file already exists (need its SHA to update)
         existing = requests.get(
             f"{GITHUB_API}/repos/{WEBSITE_REPO}/contents/{file_path}",
             headers=headers,
@@ -81,6 +114,17 @@ def publish_to_website(title: str, markdown: str, date_str: str = "") -> dict:
             payload["sha"] = existing.json()["sha"]
             payload["message"] = f"Update: {title}"
             logger.info(f"File exists — updating {filename}")
+        else:
+            # Check for same slug with a different date prefix (re-draft dedup)
+            match = _find_existing_by_slug(slug, headers)
+            if match:
+                file_path = match["path"]
+                payload["sha"] = match["sha"]
+                payload["message"] = f"Update: {title}"
+                logger.info(
+                    f"Found existing file with same slug: {match['name']} — "
+                    f"updating in place instead of creating duplicate"
+                )
 
         resp = requests.put(
             f"{GITHUB_API}/repos/{WEBSITE_REPO}/contents/{file_path}",
@@ -89,7 +133,10 @@ def publish_to_website(title: str, markdown: str, date_str: str = "") -> dict:
             timeout=15,
         )
         resp.raise_for_status()
-        post_url = f"https://teodorotopa.com/energy/{date_str}_{slug}"
+
+        # URL uses the actual file path (may be the old date if updating in place)
+        published_name = file_path.split("/")[-1].removesuffix(".md")
+        post_url = f"https://teodorotopa.com/energy/{published_name}"
         logger.info(f"Published to website: {post_url}")
 
         return {"success": True, "url": post_url, "error": None}

@@ -21,6 +21,21 @@ logger = logging.getLogger(__name__)
 NOTION_API = "https://api.notion.com/v1"
 NOTION_VERSION = "2022-06-28"
 
+# Canonical data source names and URLs for frontmatter attribution.
+# Used by get_page_as_markdown() to detect which sources a brief actually cites.
+DATA_SOURCES = {
+    "Ember":                    {"url": "https://ember-energy.org"},
+    "EIA":                      {"url": "https://www.eia.gov"},
+    "Global Forest Watch":      {"url": "https://www.globalforestwatch.org"},
+    "GFW":                      {"url": "https://www.globalforestwatch.org", "display": "Global Forest Watch"},
+    "NOAA":                     {"url": "https://www.noaa.gov"},
+    "IUCN":                     {"url": "https://www.iucnredlist.org", "display": "IUCN Red List"},
+    "NLR":                      {"url": "https://developer.nlr.gov"},
+    "Open-Meteo":               {"url": "https://open-meteo.com"},
+    "UK Carbon Intensity API":  {"url": "https://carbonintensity.org.uk"},
+    "UK Carbon Intensity":      {"url": "https://carbonintensity.org.uk", "display": "UK Carbon Intensity API"},
+}
+
 
 class NotionPublisher:
     """Pushes drafts and metadata to the Notion editorial queue."""
@@ -362,13 +377,26 @@ class NotionPublisher:
             if source_name and url:
                 lines.append(f"  - name: {source_name}")
                 lines.append(f"    url: {url}")
-            lines.append("  - name: Ember")
-            lines.append("    url: https://ember-energy.org")
+
+            # Fetch body first so we can scan it for cited data sources
+            body = self.get_page_content(page_id)
+
+            # Detect which data sources the brief actually cites
+            seen = set()
+            for keyword, info in DATA_SOURCES.items():
+                if keyword in body and info["url"] not in seen:
+                    seen.add(info["url"])
+                    display = info.get("display", keyword)
+                    lines.append(f"  - name: {display}")
+                    lines.append(f"    url: {info['url']}")
+
+            # Fallback: if no data sources detected, include Ember
+            if not seen:
+                lines.append("  - name: Ember")
+                lines.append("    url: https://ember-energy.org")
+
             lines.append("status: approved")
             lines.append("---")
-
-            # Fetch body
-            body = self.get_page_content(page_id)
             return "\n".join(lines) + "\n\n" + body
 
         except requests.RequestException as e:

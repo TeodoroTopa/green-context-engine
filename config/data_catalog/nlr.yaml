@@ -1,0 +1,76 @@
+source: nlr
+description: >
+  NLR (National Laboratory of the Rockies, formerly NREL) solar resource data
+  and PVWatts energy production estimates for US locations. Provides GHI, DNI,
+  and tilt-at-latitude irradiance data, plus estimated annual energy production
+  and capacity factor for a reference 1 MW solar system. US-only coverage.
+connector: pipeline.sources.nlr.NLRSource
+env_key: NLR_API_KEY
+
+data_types:
+  - "solar_resource: annual and monthly GHI, DNI, and tilt-at-latitude irradiance in kWh/m2/day for US locations"
+  - "pvwatts_estimate: estimated annual energy production (kWh), capacity factor (%), and solar radiation for a reference 1 MW solar system at the location"
+
+selectable: true
+note: >
+  US-only. Use solar_resource for general solar context (how sunny is this
+  location?). Use pvwatts_estimate when a story mentions a specific solar
+  project and you want to contextualize its expected output. The PVWatts
+  estimate uses a 1 MW reference system with standard defaults — the drafter
+  can scale linearly to the actual project size.
+
+entities:
+  us_states:
+    - Alabama
+    - Alaska
+    - Arizona
+    - California
+    - Colorado
+    - Connecticut
+    - Delaware
+    - Florida
+    - Georgia
+    - Hawaii
+    - Idaho
+    - Illinois
+    - Indiana
+    - Iowa
+    - Kansas
+    - Kentucky
+    - Louisiana
+    - Maine
+    - Maryland
+    - Massachusetts
+    - Michigan
+    - Minnesota
+    - Mississippi
+    - Missouri
+    - Montana
+    - Nebraska
+    - Nevada
+    - New Hampshire
+    - New Jersey
+    - New Mexico
+    - New York
+    - North Carolina
+    - North Dakota
+    - Ohio
+    - Oklahoma
+    - Oregon
+    - Pennsylvania
+    - Rhode Island
+    - South Carolina
+    - South Dakota
+    - Tennessee
+    - Texas
+    - Utah
+    - Vermont
+    - Virginia
+    - Washington
+    - West Virginia
+    - Wisconsin
+    - Wyoming
+    - District of Columbia
+    - Puerto Rico
+  national:
+    - United States
