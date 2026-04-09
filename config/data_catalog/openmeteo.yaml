@@ -22,6 +22,9 @@ note: >
   how much sunlight the location receives. A story about wind power should
   include wind_speed. Temperature and precipitation are available but NOAA may
   be preferred when heating/cooling degree days are more relevant.
+  Data is based on capital-city coordinates as a proxy for country-level values.
+  Solar and wind conditions vary within large countries — the drafter should note
+  that figures represent conditions near the capital, not a national average.
   IMPORTANT for the drafter: sunshine hours measure actual direct sunshine, not
   total daylight. A location with 14 hours between sunrise and sunset may average
   only 8-10 hours of sunshine due to cloud cover. If citing sunshine hours, always
