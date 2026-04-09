@@ -94,6 +94,7 @@ DATA_SOURCE_URLS = {
     "gfw": "https://www.globalforestwatch.org",
     "noaa": "https://www.noaa.gov",
     "iucn": "https://www.iucnredlist.org",
+    "nlr": "https://developer.nlr.gov",
     "openmeteo": "https://open-meteo.com",
     "uk_carbon": "https://carbonintensity.org.uk",
 }
@@ -104,6 +105,7 @@ DATA_SOURCE_NAMES = {
     "gfw": "Global Forest Watch",
     "noaa": "NOAA",
     "iucn": "IUCN Red List",
+    "nlr": "NLR",
     "openmeteo": "Open-Meteo",
     "uk_carbon": "UK Carbon Intensity API",
 }

@@ -30,6 +30,7 @@ DATA_SOURCES = {
     "GFW":                      {"url": "https://www.globalforestwatch.org", "display": "Global Forest Watch"},
     "NOAA":                     {"url": "https://www.noaa.gov"},
     "IUCN":                     {"url": "https://www.iucnredlist.org", "display": "IUCN Red List"},
+    "NLR":                      {"url": "https://developer.nlr.gov"},
     "Open-Meteo":               {"url": "https://open-meteo.com"},
     "UK Carbon Intensity API":  {"url": "https://carbonintensity.org.uk"},
     "UK Carbon Intensity":      {"url": "https://carbonintensity.org.uk", "display": "UK Carbon Intensity API"},

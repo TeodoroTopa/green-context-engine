@@ -349,6 +349,27 @@ class Enricher:
                 for r in precip[:6]:
                     lines.append(f"  {r['date']}: {r['value_mm']} mm")
 
+            # NLR: solar resource data (US)
+            nlr_solar = context.get("solar_resource", {})
+            if nlr_solar and isinstance(nlr_solar, dict) and "avg_ghi" in nlr_solar:
+                ghi = nlr_solar["avg_ghi"].get("annual", "?")
+                dni = nlr_solar["avg_dni"].get("annual", "?")
+                tilt = nlr_solar["avg_lat_tilt"].get("annual", "?")
+                lines.append(
+                    f"Solar resource (NLR): GHI {ghi} kWh/m²/day, "
+                    f"DNI {dni} kWh/m²/day, tilt-at-latitude {tilt} kWh/m²/day"
+                )
+
+            # NLR: PVWatts production estimate (US)
+            pvwatts = context.get("pvwatts_estimate", {})
+            if pvwatts and isinstance(pvwatts, dict) and "ac_annual_kwh" in pvwatts:
+                annual_mwh = pvwatts["ac_annual_kwh"] / 1000
+                cf = pvwatts.get("capacity_factor_pct", "?")
+                lines.append(
+                    f"PVWatts estimate for 1 MW reference system (NLR): "
+                    f"{annual_mwh:,.0f} MWh/year, {cf}% capacity factor"
+                )
+
             # Open-Meteo: solar radiation
             solar = context.get("solar_radiation", {})
             if solar and isinstance(solar, dict):
