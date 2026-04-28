@@ -47,7 +47,7 @@ Mongabay (3 feeds), Carbon Brief, PV Magazine, CleanTechnica, Electrek. Full art
 
 ## Agent Pipeline
 
-All agents use `claude-opus-4-6`. Per story:
+All agents go through the `claude` CLI proxy (`pipeline/claude_code_client.py`), which invokes `claude -p --model <model> --effort <level>`. Set via env vars (required, no defaults — `ClaudeCodeClient.__init__` raises if any are missing or invalid): `PIPELINE_CLAUDE_MODEL`, `PIPELINE_CLAUDE_EFFORT` (`low|medium|high|xhigh|max`), `PIPELINE_CLAUDE_TIMEOUT` (positive integer seconds). The `model=` kwarg passed by call sites is ignored — the CLI flag is authoritative. The proxy also passes `--strict-mcp-config --mcp-config '{"mcpServers":{}}' --setting-sources user` to skip MCP server initialization and project hooks (notably the pytest Stop hook in `.claude/settings.local.json`); subscription auth still works because keychain reads are not disabled. Per story:
 
 | Agent | Role | Calls |
 |-------|------|-------|
@@ -113,6 +113,9 @@ pytest tests/
 | `NOTION_TOKEN` | optional | Editorial queue (Notion Plus) |
 | `WEBSITE_GITHUB_TOKEN` | optional | Publish to website repo |
 | `PIPELINE_MODE` | optional | `dev`/`local` = claude CLI proxy (no API billing) |
+| `PIPELINE_CLAUDE_MODEL` | yes (when proxy used) | Model for the CLI proxy (alias like `opus`/`sonnet` or full ID like `claude-opus-4-7`) |
+| `PIPELINE_CLAUDE_EFFORT` | yes (when proxy used) | Effort level for the CLI proxy (`low`/`medium`/`high`/`xhigh`/`max`) |
+| `PIPELINE_CLAUDE_TIMEOUT` | yes (when proxy used) | Subprocess timeout in seconds for each CLI call (positive integer) |
 
 ## Notes for Claude Code
 

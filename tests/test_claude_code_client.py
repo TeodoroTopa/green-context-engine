@@ -1,14 +1,21 @@
 """Tests for the Claude Code client adapter."""
 
 import json
+import pytest
 from unittest.mock import patch, MagicMock
 
 from pipeline.claude_code_client import ClaudeCodeClient, _Messages
 
 
+def _set_env(monkeypatch):
+    monkeypatch.setenv("PIPELINE_CLAUDE_MODEL", "opus")
+    monkeypatch.setenv("PIPELINE_CLAUDE_EFFORT", "medium")
+    monkeypatch.setenv("PIPELINE_CLAUDE_TIMEOUT", "300")
+
+
 def test_create_builds_prompt_with_system():
     """create() prepends system prompt and formats messages."""
-    msgs = _Messages()
+    msgs = _Messages("opus", "medium", 300)
 
     cli_output = json.dumps({
         "result": "Test response",
@@ -37,7 +44,7 @@ def test_create_builds_prompt_with_system():
 
 def test_create_returns_matching_response_shape():
     """Response has .content[0].text and .usage.input_tokens."""
-    msgs = _Messages()
+    msgs = _Messages("opus", "medium", 300)
 
     cli_output = json.dumps({
         "result": "The answer is 42",
@@ -62,7 +69,7 @@ def test_create_returns_matching_response_shape():
 
 def test_create_handles_cli_error():
     """Returns error message when claude CLI fails."""
-    msgs = _Messages()
+    msgs = _Messages("opus", "medium", 300)
 
     mock_result = MagicMock()
     mock_result.returncode = 1
@@ -79,8 +86,28 @@ def test_create_handles_cli_error():
     assert "Error" in response.content[0].text
 
 
-def test_client_has_messages_attribute():
+def test_client_has_messages_attribute(monkeypatch):
     """ClaudeCodeClient() has a .messages.create() interface."""
+    _set_env(monkeypatch)
     client = ClaudeCodeClient()
     assert hasattr(client, "messages")
     assert hasattr(client.messages, "create")
+
+
+def test_client_raises_when_env_missing(monkeypatch):
+    """ClaudeCodeClient() refuses to silently default if env vars are unset."""
+    monkeypatch.delenv("PIPELINE_CLAUDE_MODEL", raising=False)
+    monkeypatch.delenv("PIPELINE_CLAUDE_EFFORT", raising=False)
+    monkeypatch.delenv("PIPELINE_CLAUDE_TIMEOUT", raising=False)
+
+    with pytest.raises(RuntimeError, match="PIPELINE_CLAUDE_MODEL"):
+        ClaudeCodeClient()
+
+
+def test_client_raises_on_invalid_effort(monkeypatch):
+    """Typos in PIPELINE_CLAUDE_EFFORT surface immediately."""
+    _set_env(monkeypatch)
+    monkeypatch.setenv("PIPELINE_CLAUDE_EFFORT", "med")
+
+    with pytest.raises(RuntimeError, match="PIPELINE_CLAUDE_EFFORT"):
+        ClaudeCodeClient()
