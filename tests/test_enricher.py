@@ -246,3 +246,72 @@ def test_enrich_falls_back_on_strategist_failure():
     # Falls back to World
     assert "World" in result.ember_data
     assert "Fallback" in result.fetch_plan["reasoning"]
+
+
+def test_format_primary_data_handles_ember_uk_carbon_collision():
+    """Ember and UK_CARBON both targeting the UK must coexist without crashing.
+
+    Ember writes carbon_intensity: list[dict] (yearly time series).
+    UK_CARBON writes uk_carbon_intensity: dict (daily summary).
+    Both should appear in the formatted output.
+    """
+    client = MagicMock()
+    enricher = Enricher({}, client)
+
+    data = {
+        "United Kingdom": {
+            "entity": "United Kingdom",
+            "source": "ember",
+            "generation": [
+                {"date": "2024", "series": "Wind", "generation_twh": 84.0},
+                {"date": "2024", "series": "Gas", "generation_twh": 92.0},
+            ],
+            "carbon_intensity": [
+                {"date": "2024", "emissions_intensity_gco2_per_kwh": 188},
+            ],
+            # UK_CARBON keys, namespaced so they don't collide:
+            "uk_carbon_intensity": {
+                "avg_gco2_kwh": 142,
+                "max_gco2_kwh": 220,
+                "min_gco2_kwh": 60,
+                "periods": 48,
+            },
+            "uk_generation_mix": [
+                {"fuel": "wind", "perc": 32.5},
+                {"fuel": "gas", "perc": 28.1},
+            ],
+            "date": "2026-04-27",
+        }
+    }
+
+    result = enricher._format_primary_data(data)
+
+    # Ember yearly data is present
+    assert "188 gCO2/kWh" in result
+    assert "Wind" in result
+    # UK_CARBON daily summary is present and not clobbered
+    assert "142 gCO2/kWh avg" in result
+    assert "60-220 range" in result
+    # UK_CARBON generation mix is present
+    assert "UK generation mix" in result
+    assert "wind: 32.5%" in result
+
+
+def test_format_primary_data_survives_legacy_dict_in_carbon_intensity():
+    """If a future source ever puts a dict at carbon_intensity (legacy data),
+    the Ember branch must not crash. Defensive isinstance(list) guard."""
+    client = MagicMock()
+    enricher = Enricher({}, client)
+
+    data = {
+        "United Kingdom": {
+            "entity": "United Kingdom",
+            # Pathological: dict where list was expected (the pre-fix shape).
+            "carbon_intensity": {"avg_gco2_kwh": 142, "min_gco2_kwh": 60, "max_gco2_kwh": 220},
+        }
+    }
+
+    # Must not raise TypeError("string indices must be integers...").
+    result = enricher._format_primary_data(data)
+    # And the Ember-style line must simply be absent rather than crashing.
+    assert "Carbon intensity (" not in result
