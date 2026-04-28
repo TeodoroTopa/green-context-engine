@@ -270,7 +270,7 @@ class Enricher:
                     lines.extend(_format_ember_generation(gen))
 
             carbon = context.get("carbon_intensity", [])
-            if carbon:
+            if carbon and isinstance(carbon, list):
                 latest_c = max(carbon, key=lambda x: x["date"])
                 lines.append(
                     f"Carbon intensity ({latest_c['date']}): "
@@ -413,7 +413,7 @@ class Enricher:
                 )
 
             # UK Carbon Intensity: daily carbon intensity
-            uk_ci = context.get("carbon_intensity", {})
+            uk_ci = context.get("uk_carbon_intensity", {})
             if uk_ci and isinstance(uk_ci, dict) and "avg_gco2_kwh" in uk_ci:
                 date = context.get("date", "")
                 lines.append(
@@ -423,7 +423,7 @@ class Enricher:
                 )
 
             # UK Carbon Intensity: generation mix
-            uk_mix = context.get("generation_mix", [])
+            uk_mix = context.get("uk_generation_mix", [])
             if uk_mix and isinstance(uk_mix, list) and uk_mix and isinstance(uk_mix[0], dict) and "fuel" in uk_mix[0]:
                 date = context.get("date", "")
                 lines.append(f"UK generation mix ({date}, UK Carbon Intensity API):")
@@ -431,7 +431,7 @@ class Enricher:
                     lines.append(f"  {item['fuel']}: {item['perc']}%")
 
             # UK Carbon Intensity: 7-day trend
-            trend = context.get("intensity_trend", {})
+            trend = context.get("uk_intensity_trend", {})
             if trend and isinstance(trend, dict) and "avg_gco2_kwh" in trend:
                 days = trend.get("period_days", 7)
                 lines.append(

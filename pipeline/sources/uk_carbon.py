@@ -79,7 +79,7 @@ class UKCarbonSource(BaseSource):
                     if p.get("intensity", {}).get("actual") is not None
                 ]
                 if actuals:
-                    result["carbon_intensity"] = {
+                    result["uk_carbon_intensity"] = {
                         "avg_gco2_kwh": round(sum(actuals) / len(actuals)),
                         "max_gco2_kwh": max(actuals),
                         "min_gco2_kwh": min(actuals),
@@ -106,7 +106,7 @@ class UKCarbonSource(BaseSource):
                     for fuel, vals in fuel_totals.items()
                 ]
             if mix:
-                result["generation_mix"] = [
+                result["uk_generation_mix"] = [
                     item for item in mix if item.get("perc", 0) > 0
                 ]
 
@@ -119,7 +119,7 @@ class UKCarbonSource(BaseSource):
                 entry = stats[0]
                 intensity = entry.get("intensity", {})
                 if intensity:
-                    result["intensity_trend"] = {
+                    result["uk_intensity_trend"] = {
                         "period_days": 7,
                         "avg_gco2_kwh": intensity.get("average"),
                         "max_gco2_kwh": intensity.get("max"),

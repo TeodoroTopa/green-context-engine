@@ -77,12 +77,12 @@ def test_get_generation_context_carbon_intensity(mock_fetch):
 
     assert result["entity"] == "United Kingdom"
     assert result["source"] == "uk_carbon"
-    assert "carbon_intensity" in result
-    ci = result["carbon_intensity"]
+    assert "uk_carbon_intensity" in result
+    ci = result["uk_carbon_intensity"]
     assert ci["avg_gco2_kwh"] == 180  # (175 + 185) / 2
     assert ci["max_gco2_kwh"] == 185
     assert ci["min_gco2_kwh"] == 175
-    assert "generation_mix" not in result
+    assert "uk_generation_mix" not in result
 
 
 @patch.object(UKCarbonSource, "fetch", return_value=_make_generation_response())
@@ -93,8 +93,8 @@ def test_get_generation_context_generation_mix(mock_fetch):
         "United Kingdom", data_types=["generation_mix"]
     )
 
-    assert "generation_mix" in result
-    fuels = {item["fuel"] for item in result["generation_mix"]}
+    assert "uk_generation_mix" in result
+    fuels = {item["fuel"] for item in result["uk_generation_mix"]}
     assert "gas" in fuels
     assert "wind" in fuels
     # Coal at 0% should be excluded
@@ -123,8 +123,8 @@ def test_get_generation_context_intensity_trend(mock_fetch):
     source = UKCarbonSource()
     result = source.get_generation_context("UK", data_types=["intensity_trend"])
 
-    assert "intensity_trend" in result
-    trend = result["intensity_trend"]
+    assert "uk_intensity_trend" in result
+    trend = result["uk_intensity_trend"]
     assert trend["period_days"] == 7
     assert trend["avg_gco2_kwh"] == 180
     assert trend["max_gco2_kwh"] == 250

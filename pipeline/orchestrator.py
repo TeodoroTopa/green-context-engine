@@ -256,8 +256,8 @@ class Pipeline:
                         self.notion.append_content(notion_page_id, draft_path)
 
                 run_tracker.calls.extend(tracker.calls)
-            except Exception as e:
-                logger.error(f"Failed to process '{story.title}': {e}")
+            except Exception:
+                logger.exception(f"Failed to process '{story.title}'")
                 continue
 
         if run_tracker.calls:

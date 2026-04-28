@@ -44,8 +44,26 @@ class _Response:
         self.stop_reason = "end_turn"
 
 
+_VALID_EFFORTS = {"low", "medium", "high", "xhigh", "max"}
+
+
+def _require_env(name: str) -> str:
+    val = os.environ.get(name)
+    if not val:
+        raise RuntimeError(
+            f"{name} is not set. Add it to .env "
+            f"(see CLAUDE.md → Environment Variables)."
+        )
+    return val
+
+
 class _Messages:
     """Mimics client.messages with a create() method."""
+
+    def __init__(self, model: str, effort: str, timeout: int):
+        self._model = model
+        self._effort = effort
+        self._timeout = timeout
 
     def create(self, *, model: str = "", max_tokens: int = 4096,
                messages: list[dict], system: str = "", **kwargs) -> _Response:
@@ -59,7 +77,10 @@ class _Messages:
             prompt_parts.append(f"[{role}]\n{content}")
         prompt = "\n\n".join(prompt_parts)
 
-        logger.info(f"Claude Code proxy: routing {len(prompt)} chars through claude CLI")
+        logger.info(
+            f"Claude Code proxy: routing {len(prompt)} chars through claude CLI "
+            f"(model={self._model}, effort={self._effort}, timeout={self._timeout}s)"
+        )
 
         try:
             # Remove ANTHROPIC_API_KEY from env so claude CLI uses subscription
@@ -67,12 +88,15 @@ class _Messages:
             env = {k: v for k, v in os.environ.items() if k != "ANTHROPIC_API_KEY"}
 
             result = subprocess.run(
-                ["claude", "-p", "--output-format", "json"],
+                ["claude", "-p", "--output-format", "json",
+                 "--model", self._model, "--effort", self._effort,
+                 "--strict-mcp-config", "--mcp-config", '{"mcpServers":{}}',
+                 "--setting-sources", "user"],
                 input=prompt,
                 capture_output=True,
                 text=True,
                 encoding="utf-8",
-                timeout=120,
+                timeout=self._timeout,
                 env=env,
             )
             # Parse JSON even on non-zero exit (CLI returns rc=1 for some errors
@@ -93,7 +117,7 @@ class _Messages:
                 output_tokens=usage.get("output_tokens", 0),
             )
         except subprocess.TimeoutExpired:
-            logger.error("claude CLI timed out after 120s")
+            logger.error(f"claude CLI timed out after {self._timeout}s")
             return _Response("Error: claude CLI timed out")
         except (json.JSONDecodeError, KeyError) as e:
             logger.error(f"Failed to parse claude CLI output: {e}")
@@ -104,4 +128,25 @@ class ClaudeCodeClient:
     """Drop-in replacement for anthropic.Anthropic() that uses claude CLI."""
 
     def __init__(self):
-        self.messages = _Messages()
+        model = _require_env("PIPELINE_CLAUDE_MODEL")
+
+        effort = _require_env("PIPELINE_CLAUDE_EFFORT")
+        if effort not in _VALID_EFFORTS:
+            raise RuntimeError(
+                f"PIPELINE_CLAUDE_EFFORT={effort!r} is invalid. "
+                f"Must be one of: {sorted(_VALID_EFFORTS)}."
+            )
+
+        timeout_raw = _require_env("PIPELINE_CLAUDE_TIMEOUT")
+        try:
+            timeout = int(timeout_raw)
+        except ValueError:
+            raise RuntimeError(
+                f"PIPELINE_CLAUDE_TIMEOUT={timeout_raw!r} is not an integer."
+            )
+        if timeout <= 0:
+            raise RuntimeError(
+                f"PIPELINE_CLAUDE_TIMEOUT={timeout} must be a positive integer."
+            )
+
+        self.messages = _Messages(model, effort, timeout)
