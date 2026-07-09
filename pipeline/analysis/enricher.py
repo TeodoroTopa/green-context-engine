@@ -124,7 +124,15 @@ class Enricher:
         fetch_plan = plan_data_fetch(
             self.client, self.model, story, self._catalog_text, tracker,
         )
+        # 2-4. Execute the plan, format, and build the EnrichedStory.
+        return self.enrich_with_plan(story, fetch_plan)
 
+    def enrich_with_plan(self, story: Story, fetch_plan: dict) -> EnrichedStory:
+        """Enrich using a precomputed strategist plan (no Claude call here).
+
+        Used by the batched morning run, where the strategist stage is done
+        separately (and can itself be batched) before data is fetched.
+        """
         # 2. Execute the fetch plan
         primary_data, benchmark_data = self._execute_plan(fetch_plan)
 
