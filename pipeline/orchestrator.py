@@ -20,6 +20,7 @@ from pipeline.claude_code_client import ClaudeCodeClient
 from pipeline.content.fetcher import fetch_article_text
 from pipeline.generation.drafter import Drafter
 from pipeline.generation.editor import check_draft, verify_draft
+from pipeline.model_config import model_for
 from pipeline.monitors.rss_monitor import RSSMonitor
 from pipeline.publishing.notion import NotionPublisher
 from pipeline.sources.eia import EIASource
@@ -145,7 +146,7 @@ class Pipeline:
 
             # Editor: pass / fix / fail
             edit_result = check_draft(
-                self.client, self.drafter.model, draft_path,
+                self.client, model_for("editor"), draft_path,
                 tracker=tracker, **editor_kwargs,
             )
             verdict = edit_result.get("verdict", "fail")
@@ -163,7 +164,7 @@ class Pipeline:
 
                     # Verification pass — pass/fail only, no more fixes
                     verify_result = verify_draft(
-                        self.client, self.drafter.model, draft_path,
+                        self.client, model_for("verifier"), draft_path,
                         tracker=tracker, **editor_kwargs,
                     )
                     if verify_result.get("verdict") == "pass":
@@ -224,7 +225,7 @@ class Pipeline:
         run_tracker = UsageTracker()
         if len(new_stories) > max_stories:
             new_stories = select_best_stories(
-                self.client, self.enricher.model,
+                self.client, model_for("selector"),
                 new_stories, self.enricher._catalog_text,
                 max_stories, run_tracker,
             )

@@ -14,6 +14,7 @@ from pathlib import Path
 from pipeline.analysis.catalog import load_catalog, get_available_sources
 from pipeline.analysis.data_strategist import plan_data_fetch
 from pipeline.analysis.utils import strip_code_fences
+from pipeline.model_config import model_for
 from pipeline.monitors.rss_monitor import Story
 from pipeline.sources.base import BaseSource
 from pipeline.sources.ember import EmberSource
@@ -103,10 +104,10 @@ class EnrichedStory:
 class Enricher:
     """Enriches stories with energy data using AI-driven data selection."""
 
-    def __init__(self, sources: dict[str, BaseSource], client, model: str = "claude-opus-4-6"):
+    def __init__(self, sources: dict[str, BaseSource], client, model: str | None = None):
         self.sources = sources  # {"ember": EmberSource, "eia": EIASource, ...}
         self.client = client
-        self.model = model
+        self.model = model or model_for("strategist")
         self._countries = self._load_countries()
         self._catalog_text = load_catalog()
 

@@ -132,7 +132,7 @@ def check_draft(
         messages=[{"role": "user", "content": prompt}],
     )
     if tracker:
-        tracker.track(response, "editor")
+        tracker.track(response, "editor", model=model)
 
     text = strip_code_fences(response.content[0].text)
     try:
@@ -189,7 +189,7 @@ def verify_draft(
         messages=[{"role": "user", "content": prompt}],
     )
     if tracker:
-        tracker.track(response, "verification")
+        tracker.track(response, "verification", model=model)
 
     text = strip_code_fences(response.content[0].text)
     try:

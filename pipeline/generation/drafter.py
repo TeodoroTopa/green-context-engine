@@ -14,6 +14,7 @@ from pipeline.analysis.enricher import EnrichedStory
 from pipeline.analysis.utils import strip_code_fences
 from pipeline.generation.prompts.energy_brief import SYSTEM_PROMPT, build_draft_prompt
 from pipeline.generation.voice import check_voice
+from pipeline.model_config import model_for
 from pipeline.usage import UsageTracker
 
 logger = logging.getLogger(__name__)
@@ -24,9 +25,9 @@ DRAFTS_DIR = Path("content/drafts")
 class Drafter:
     """Generates draft posts from enriched stories."""
 
-    def __init__(self, client: Anthropic, model: str = "claude-opus-4-6"):
+    def __init__(self, client: Anthropic, model: str | None = None):
         self.client = client
-        self.model = model
+        self.model = model or model_for("drafter")
 
     def draft(self, enriched: EnrichedStory, tracker: UsageTracker | None = None,
               feedback: str = "") -> Path:
@@ -68,7 +69,7 @@ class Drafter:
             messages=[{"role": "user", "content": prompt}],
         )
         if tracker:
-            tracker.track(response, "draft_generation")
+            tracker.track(response, "draft_generation", model=self.model)
         return self._extract_draft(response.content[0].text)
 
     def revise(self, draft_path: Path, errors: list[dict], data_text: str,
@@ -112,7 +113,7 @@ class Drafter:
             }],
         )
         if tracker:
-            tracker.track(response, "revision")
+            tracker.track(response, "revision", model=self.model)
 
         revised = self._extract_draft(response.content[0].text)
         draft_path.write_text(revised, encoding="utf-8")
@@ -140,7 +141,7 @@ class Drafter:
             }],
         )
         if tracker:
-            tracker.track(response, "voice_fix")
+            tracker.track(response, "voice_fix", model=self.model)
         return self._extract_draft(response.content[0].text)
 
     def _extract_draft(self, text: str) -> str:
