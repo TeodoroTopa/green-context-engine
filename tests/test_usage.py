@@ -64,6 +64,18 @@ def test_budget_guard_env_override(monkeypatch):
     assert g.cap == pytest.approx(0.10)
 
 
+def test_budget_guard_tracker_bound_accounts_for_all_spend():
+    """A tracker-bound guard counts sync + batch calls, not just recorded ones."""
+    t = UsageTracker()
+    g = BudgetGuard(cap_usd=0.10, tracker=t)
+    assert g.spent_so_far() == pytest.approx(0.0)
+    # 1M haiku input = $1.00 tracked -> over a $0.10 cap already
+    t.track(_resp(1_000_000, 0, "claude-haiku-4-5"), "selector", model="claude-haiku-4-5")
+    assert g.spent_so_far() == pytest.approx(1.0)
+    with pytest.raises(BudgetExceeded):
+        g.check(0.0)
+
+
 def test_budget_guard_check_raises_over_cap():
     g = BudgetGuard(cap_usd=0.10)
     g.check(0.05)  # under cap, ok

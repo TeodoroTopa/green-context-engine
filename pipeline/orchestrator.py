@@ -287,7 +287,7 @@ class Pipeline:
         from pipeline.usage import BudgetExceeded, BudgetGuard, UsageTracker
 
         run_tracker = UsageTracker()
-        guard = BudgetGuard()
+        guard = BudgetGuard(tracker=run_tracker)  # cap accounts for all tracked spend
         batch = BatchClient(self.client)
         draft_model = self.drafter.model
         editor_model = model_for("editor")
@@ -445,7 +445,10 @@ class Pipeline:
                 except Exception:
                     logger.exception(f"Notion publish failed for '{story.title}'")
 
-        logger.info(f"=== Batched run total (spent ~${guard.spent:.4f}) ===\n{run_tracker.summary()}")
+        logger.info(
+            f"=== Batched run total (spent ~${guard.spent_so_far():.4f} / cap ${guard.cap:.2f}) ==="
+            f"\n{run_tracker.summary()}"
+        )
         return drafts
 
     def _submit_batch(self, batch, guard, reqs, model, max_tokens, tracker, label):
@@ -466,13 +469,11 @@ class Pipeline:
 
         results = batch.run(reqs)
 
-        actual = 0.0
+        # Tracking each result into the run tracker is what advances the guard's
+        # spend (the guard is tracker-bound), so no separate record() is needed.
         for r in results.values():
             if r.ok:
                 tracker.track(r.message, label, model=model, batch=True)
-                u = r.message.usage
-                actual += estimate_cost(model, u.input_tokens, u.output_tokens, batch=True)
-        guard.record(actual)
         return results
 
     def _load_feeds(self, source: str | None = None) -> tuple[list[dict], list[str]]:

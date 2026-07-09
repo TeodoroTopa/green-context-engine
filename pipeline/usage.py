@@ -130,24 +130,37 @@ class BudgetGuard:
 
     DEFAULT_CAP = 0.50
 
-    def __init__(self, cap_usd: float | None = None):
+    def __init__(self, cap_usd: float | None = None, tracker: "UsageTracker | None" = None):
         if cap_usd is None:
             raw = os.getenv("PIPELINE_DAILY_BUDGET_USD")
             cap_usd = float(raw) if raw else self.DEFAULT_CAP
         self.cap = cap_usd
-        self.spent = 0.0
+        self._tracker = tracker  # when set, spend is derived from all tracked calls
+        self.spent = 0.0         # manual accumulator (used when no tracker)
+
+    def spent_so_far(self) -> float:
+        """Total spend so far — from the tracker if bound, else the accumulator.
+
+        A bound tracker accounts for *every* call (sync Haiku stages and batched
+        Sonnet stages alike), so the cap is honored precisely.
+        """
+        if self._tracker is not None:
+            return self._tracker.estimated_cost_usd()
+        return self.spent
 
     def remaining(self) -> float:
-        return max(0.0, self.cap - self.spent)
+        return max(0.0, self.cap - self.spent_so_far())
 
     def check(self, est_cost: float) -> None:
         """Raise BudgetExceeded if adding est_cost would cross the cap."""
-        if self.spent + est_cost > self.cap:
+        spent = self.spent_so_far()
+        if spent + est_cost > self.cap:
             raise BudgetExceeded(
-                f"Projected spend ${self.spent + est_cost:.4f} exceeds daily cap "
-                f"${self.cap:.2f} (already spent ${self.spent:.4f}, "
+                f"Projected spend ${spent + est_cost:.4f} exceeds daily cap "
+                f"${self.cap:.2f} (already spent ${spent:.4f}, "
                 f"this step ~${est_cost:.4f})."
             )
 
     def record(self, actual_cost: float) -> None:
+        """Manually add spend (no-op semantics when a tracker is bound)."""
         self.spent += actual_cost
