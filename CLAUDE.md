@@ -61,18 +61,20 @@ Editor allows editorial characterizations (e.g., "nearly double" for 1.83x) but 
 
 ## Daily Workflow — autonomous (GitHub Actions, API mode)
 
-Runs unattended in the cloud; no PC required. Two scheduled workflows in
-`.github/workflows/`, gated to fire at the correct **US Eastern** local hour
-(cron is UTC and DST-unaware, so each fires at both offsets and a first job
-checks `TZ=America/New_York date +%H`).
+Runs unattended in the cloud; no PC required. One workflow —
+`.github/workflows/pipeline.yml` — ticks hourly; a `decide` job checks the
+actual **US Eastern** hour and launches the matching run. Times are the two env
+knobs at the top of that file (`MORNING_HOUR_ET` / `EVENING_HOUR_ET`) — edit one
+line to reschedule; DST is handled automatically (no UTC math). Manual runs:
+Actions tab → "Run workflow" → pick `generate` or `publish-learn`.
 
-**7am ET — `generate.yml`** → `scripts/run_pipeline_batched.py`:
+**7am ET — `generate` job** → `scripts/run_pipeline_batched.py`:
 `Pipeline.run_batched()` discovers/enriches stories, then drafts and edits via
 the **Message Batches API** (50% off) for the two Sonnet stages. Drafts land in
 Notion as "Review". A `BudgetGuard` (env `PIPELINE_DAILY_BUDGET_USD`, default
 `$0.50`) aborts before any over-cap batch.
 
-**7pm ET — `publish-learn.yml`**:
+**7pm ET — `publish-learn` job**:
 1. `publish_approved.py` — publishes approved drafts to the website via GitHub API → Vercel.
 2. `process_feedback.py` — learns writing rules from rejections into `config/feedback_rules.yaml`.
 3. Commits the updated `feedback_rules.yaml` back to this repo so the next morning's drafts use it (ephemeral runners don't persist local state; Notion is the source of truth for everything else).
