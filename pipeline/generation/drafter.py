@@ -14,19 +14,21 @@ from pipeline.analysis.enricher import EnrichedStory
 from pipeline.analysis.utils import strip_code_fences
 from pipeline.generation.prompts.energy_brief import SYSTEM_PROMPT, build_draft_prompt
 from pipeline.generation.voice import check_voice
+from pipeline.model_config import model_for
 from pipeline.usage import UsageTracker
 
 logger = logging.getLogger(__name__)
 
 DRAFTS_DIR = Path("content/drafts")
+DRAFT_MAX_TOKENS = 3000
 
 
 class Drafter:
     """Generates draft posts from enriched stories."""
 
-    def __init__(self, client: Anthropic, model: str = "claude-opus-4-6"):
+    def __init__(self, client: Anthropic, model: str | None = None):
         self.client = client
-        self.model = model
+        self.model = model or model_for("drafter")
 
     def draft(self, enriched: EnrichedStory, tracker: UsageTracker | None = None,
               feedback: str = "") -> Path:
@@ -41,6 +43,12 @@ class Drafter:
 
         Returns the path to the saved draft file.
         """
+        prompt = self.build_prompt(enriched, feedback)
+        draft_text = self._generate(prompt, tracker)
+        return self._finalize(enriched, draft_text, tracker)
+
+    def build_prompt(self, enriched: EnrichedStory, feedback: str = "") -> str:
+        """Build the drafter user prompt (shared by the sync and batch paths)."""
         prompt = build_draft_prompt(enriched)
         if feedback:
             prompt += (
@@ -50,25 +58,35 @@ class Drafter:
                 f"Avoid these issues in your new draft.\n"
                 f"</feedback>"
             )
-        draft_text = self._generate(prompt, tracker)
+        return prompt
 
+    def finalize_from_text(
+        self, enriched: EnrichedStory, raw_text: str,
+        tracker: UsageTracker | None = None,
+    ) -> Path:
+        """Turn a raw batch draft response into a saved, voice-checked draft."""
+        return self._finalize(enriched, self._extract_draft(raw_text), tracker)
+
+    def _finalize(
+        self, enriched: EnrichedStory, draft_text: str,
+        tracker: UsageTracker | None = None,
+    ) -> Path:
         violations = check_voice(draft_text)
         if violations:
             logger.info(f"Voice violations found: {violations}")
             draft_text = self._fix_violations(draft_text, violations, tracker)
-
         return self._save(enriched, draft_text)
 
     def _generate(self, prompt: str, tracker: UsageTracker | None = None) -> str:
         """Call Claude to generate a draft."""
         response = self.client.messages.create(
             model=self.model,
-            max_tokens=3000,
+            max_tokens=DRAFT_MAX_TOKENS,
             system=SYSTEM_PROMPT,
             messages=[{"role": "user", "content": prompt}],
         )
         if tracker:
-            tracker.track(response, "draft_generation")
+            tracker.track(response, "draft_generation", model=self.model)
         return self._extract_draft(response.content[0].text)
 
     def revise(self, draft_path: Path, errors: list[dict], data_text: str,
@@ -112,7 +130,7 @@ class Drafter:
             }],
         )
         if tracker:
-            tracker.track(response, "revision")
+            tracker.track(response, "revision", model=self.model)
 
         revised = self._extract_draft(response.content[0].text)
         draft_path.write_text(revised, encoding="utf-8")
@@ -140,7 +158,7 @@ class Drafter:
             }],
         )
         if tracker:
-            tracker.track(response, "voice_fix")
+            tracker.track(response, "voice_fix", model=self.model)
         return self._extract_draft(response.content[0].text)
 
     def _extract_draft(self, text: str) -> str:

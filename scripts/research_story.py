@@ -47,9 +47,10 @@ def main():
     pipeline = Pipeline()
     try:
         enriched, draft_path, edit_result = pipeline.research_and_draft(story)
+        passed = edit_result.get("verdict") == "pass"
         print(f"\nDraft saved: {draft_path}")
-        print(f"Editor: {'PASSED' if edit_result['pass'] else 'FAILED'}")
-        if not edit_result["pass"]:
+        print(f"Editor: {'PASSED' if passed else 'FAILED'}")
+        if not passed:
             print(f"  Summary: {edit_result.get('summary', '')}")
     except ValueError as e:
         print(f"\nSkipped: {e}", file=sys.stderr)

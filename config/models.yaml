@@ -1,0 +1,19 @@
+# Per-stage Claude model assignments (API mode).
+#
+# Cheap/mechanical stages use Haiku; quality-critical prose stages use Sonnet.
+# These IDs are honored by the Anthropic SDK (PIPELINE_MODE=prod). In local CLI
+# proxy mode (PIPELINE_MODE=local) the model= kwarg is ignored and the CLI flag
+# (PIPELINE_CLAUDE_MODEL) is authoritative — this file has no effect there.
+#
+# Model IDs must be valid current aliases (see Anthropic model catalog).
+
+stages:
+  selector: claude-haiku-4-5      # ranks RSS candidates by data fit
+  strategist: claude-haiku-4-5    # picks sources/entities/data_types
+  drafter: claude-sonnet-5        # writes the 200-250 word brief
+  editor: claude-sonnet-5         # fact-checks and fixes
+  verifier: claude-haiku-4-5      # read-only pass/fail recheck
+  feedback: claude-sonnet-5       # evening: learns writing rules from rejections
+
+# Fallback used when a stage is missing above.
+default: claude-haiku-4-5

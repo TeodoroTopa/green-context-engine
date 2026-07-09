@@ -25,6 +25,7 @@ from dotenv import load_dotenv
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 from pipeline.claude_code_client import ClaudeCodeClient
+from pipeline.model_config import model_for
 from pipeline.publishing.notion import NotionPublisher
 
 logging.basicConfig(
@@ -181,7 +182,7 @@ def main():
 
     try:
         response1 = client.messages.create(
-            model="claude-opus-4-6",
+            model=model_for("feedback"),
             max_tokens=500,
             messages=[{"role": "user", "content": prompt1}],
         )
@@ -210,7 +211,7 @@ def main():
             candidate_rules=_format_bulleted(candidates),
         )
         response2 = client.messages.create(
-            model="claude-opus-4-6",
+            model=model_for("feedback"),
             max_tokens=1500,
             messages=[{"role": "user", "content": prompt2}],
         )

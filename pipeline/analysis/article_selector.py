@@ -90,7 +90,7 @@ def select_best_stories(
         messages=[{"role": "user", "content": prompt}],
     )
     if tracker:
-        tracker.track(response, "article_selector")
+        tracker.track(response, "article_selector", model=model)
 
     text = strip_code_fences(response.content[0].text)
     try:

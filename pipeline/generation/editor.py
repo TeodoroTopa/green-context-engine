@@ -97,6 +97,81 @@ Data provided to writer:
 """
 
 
+EDITOR_MAX_TOKENS = 3000
+VERIFY_MAX_TOKENS = 400
+
+
+def build_editor_prompt(
+    draft_text: str, story_title: str, story_summary: str,
+    story_source: str, data_text: str, story_full_text: str = "",
+) -> str:
+    """Build the editor prompt (shared by the sync and batch paths)."""
+    article_text_block = f"\nArticle excerpt:\n{story_full_text}\n" if story_full_text else ""
+    return EDITOR_PROMPT.format(
+        story_title=story_title,
+        story_summary=story_summary,
+        story_source=story_source,
+        article_text_block=article_text_block,
+        data_text=data_text,
+        draft_text=draft_text,
+    )
+
+
+def build_verify_prompt(
+    draft_text: str, story_title: str, story_summary: str,
+    story_source: str, data_text: str, story_full_text: str = "",
+) -> str:
+    """Build the verification prompt (shared by the sync and batch paths)."""
+    article_text_block = f"\nArticle excerpt:\n{story_full_text}\n" if story_full_text else ""
+    return VERIFY_PROMPT.format(
+        story_title=story_title,
+        story_summary=story_summary,
+        story_source=story_source,
+        article_text_block=article_text_block,
+        data_text=data_text,
+        draft_text=draft_text,
+    )
+
+
+def parse_editor_response(text: str, draft_name: str) -> dict:
+    """Parse an editor response into a verdict dict (JSON or prose fallback)."""
+    text = strip_code_fences(text)
+    try:
+        result = json.loads(text)
+    except json.JSONDecodeError:
+        return _parse_prose_response(text, draft_name)
+
+    verdict = result.get("verdict", "")
+    # Handle legacy format (old "pass" boolean)
+    if "pass" in result and "verdict" not in result:
+        verdict = "pass" if result["pass"] else "fail"
+        result["verdict"] = verdict
+
+    if verdict == "pass":
+        logger.info(f"Editor PASSED: {draft_name}")
+    elif verdict == "fix":
+        changes = result.get("changes", [])
+        logger.info(f"Editor FIXED: {draft_name} — {', '.join(changes)[:100]}")
+    else:
+        logger.warning(f"Editor FAILED: {draft_name} — {result.get('summary', '')[:150]}")
+    return result
+
+
+def parse_verify_response(text: str, draft_name: str) -> dict:
+    """Parse a verification response into a pass/fail verdict dict."""
+    text = strip_code_fences(text)
+    try:
+        result = json.loads(text)
+    except json.JSONDecodeError:
+        return _parse_prose_response(text, draft_name)
+    verdict = result.get("verdict", "fail")
+    if verdict == "pass":
+        logger.info(f"Verification PASSED: {draft_name}")
+    else:
+        logger.warning(f"Verification FAILED: {draft_name} — {result.get('summary', '')[:100]}")
+    return result
+
+
 def check_draft(
     client,
     model: str,
@@ -114,49 +189,18 @@ def check_draft(
         Dict with keys: verdict ("pass"|"fix"|"fail"), summary (str),
         and optionally: fixed_draft (str), changes (list), errors (list).
     """
-    draft_text = draft_path.read_text(encoding="utf-8")
-    article_text_block = f"\nArticle excerpt:\n{story_full_text}\n" if story_full_text else ""
-
-    prompt = EDITOR_PROMPT.format(
-        story_title=story_title,
-        story_summary=story_summary,
-        story_source=story_source,
-        article_text_block=article_text_block,
-        data_text=data_text,
-        draft_text=draft_text,
+    prompt = build_editor_prompt(
+        draft_path.read_text(encoding="utf-8"),
+        story_title, story_summary, story_source, data_text, story_full_text,
     )
-
     response = client.messages.create(
         model=model,
-        max_tokens=3000,
+        max_tokens=EDITOR_MAX_TOKENS,
         messages=[{"role": "user", "content": prompt}],
     )
     if tracker:
-        tracker.track(response, "editor")
-
-    text = strip_code_fences(response.content[0].text)
-    try:
-        result = json.loads(text)
-        verdict = result.get("verdict", "")
-
-        # Handle legacy format (old "pass" boolean)
-        if "pass" in result and "verdict" not in result:
-            verdict = "pass" if result["pass"] else "fail"
-            result["verdict"] = verdict
-
-        if verdict == "pass":
-            logger.info(f"Editor PASSED: {draft_path.name}")
-        elif verdict == "fix":
-            changes = result.get("changes", [])
-            logger.info(f"Editor FIXED: {draft_path.name} — {', '.join(changes)[:100]}")
-        else:
-            summary = result.get("summary", "")
-            logger.warning(f"Editor FAILED: {draft_path.name} — {summary[:150]}")
-
-        return result
-
-    except json.JSONDecodeError:
-        return _parse_prose_response(text, draft_path.name)
+        tracker.track(response, "editor", model=model)
+    return parse_editor_response(response.content[0].text, draft_path.name)
 
 
 def verify_draft(
@@ -171,37 +215,18 @@ def verify_draft(
     tracker: UsageTracker | None = None,
 ) -> dict:
     """Verification pass — pass or fail only, no fixes. Used after editor fixes."""
-    draft_text = draft_path.read_text(encoding="utf-8")
-    article_text_block = f"\nArticle excerpt:\n{story_full_text}\n" if story_full_text else ""
-
-    prompt = VERIFY_PROMPT.format(
-        story_title=story_title,
-        story_summary=story_summary,
-        story_source=story_source,
-        article_text_block=article_text_block,
-        data_text=data_text,
-        draft_text=draft_text,
+    prompt = build_verify_prompt(
+        draft_path.read_text(encoding="utf-8"),
+        story_title, story_summary, story_source, data_text, story_full_text,
     )
-
     response = client.messages.create(
         model=model,
-        max_tokens=400,
+        max_tokens=VERIFY_MAX_TOKENS,
         messages=[{"role": "user", "content": prompt}],
     )
     if tracker:
-        tracker.track(response, "verification")
-
-    text = strip_code_fences(response.content[0].text)
-    try:
-        result = json.loads(text)
-        verdict = result.get("verdict", "fail")
-        if verdict == "pass":
-            logger.info(f"Verification PASSED: {draft_path.name}")
-        else:
-            logger.warning(f"Verification FAILED: {draft_path.name} — {result.get('summary', '')[:100]}")
-        return result
-    except json.JSONDecodeError:
-        return _parse_prose_response(text, draft_path.name)
+        tracker.track(response, "verification", model=model)
+    return parse_verify_response(response.content[0].text, draft_path.name)
 
 
 def _parse_prose_response(text: str, filename: str) -> dict:

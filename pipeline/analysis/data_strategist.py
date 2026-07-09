@@ -98,7 +98,7 @@ def plan_data_fetch(
         messages=[{"role": "user", "content": prompt}],
     )
     if tracker:
-        tracker.track(response, "data_strategist")
+        tracker.track(response, "data_strategist", model=model)
 
     text = strip_code_fences(response.content[0].text)
     try:

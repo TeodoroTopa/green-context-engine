@@ -1,0 +1,121 @@
+name: Energy Context Engine (scheduled)
+
+# ─────────────────────────────────────────────────────────────────────────
+#  ONE place to manage the schedule.
+#
+#  • To change WHEN it runs: edit MORNING_HOUR_ET / EVENING_HOUR_ET below
+#    (24-hour US-Eastern clock, e.g. "7" = 7am, "19" = 7pm). One line each.
+#    DST is handled automatically — no UTC math.
+#  • To change HOW OFTEN / which days: edit the single cron line.
+#  • To run right now (bypasses the clock): Actions tab → this workflow →
+#    "Run workflow" → pick generate or publish-learn.
+#
+#  How it works: the cron ticks hourly; the `decide` job checks the actual
+#  New York hour and launches the matching run (or nothing). A no-match tick
+#  is a ~5-second job. If you'd rather not tick hourly on a private repo,
+#  replace "0 * * * *" with the two UTC hours that bracket your times
+#  (e.g. morning 7am ET → "0 11,12 * * *") — the decide gate still applies.
+# ─────────────────────────────────────────────────────────────────────────
+
+on:
+  schedule:
+    - cron: "0 * * * *"          # hourly tick; decide job filters to the ET hours
+  workflow_dispatch:
+    inputs:
+      run:
+        description: Which run to trigger now
+        type: choice
+        options: [generate, publish-learn]
+        default: generate
+
+concurrency:
+  group: energy-context-engine
+  cancel-in-progress: false
+
+env:
+  MORNING_HOUR_ET: "7"           # 7am ET — scrape + build summaries (batched)
+  EVENING_HOUR_ET: "19"          # 7pm ET — publish approved + learn from rejections
+
+jobs:
+  decide:
+    runs-on: ubuntu-latest
+    outputs:
+      run: ${{ steps.pick.outputs.run }}
+    steps:
+      - id: pick
+        run: |
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            echo "run=${{ inputs.run }}" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          hour=$(TZ=America/New_York date +%-H)
+          echo "New York hour: $hour"
+          if [ "$hour" = "$MORNING_HOUR_ET" ]; then
+            echo "run=generate" >> "$GITHUB_OUTPUT"
+          elif [ "$hour" = "$EVENING_HOUR_ET" ]; then
+            echo "run=publish-learn" >> "$GITHUB_OUTPUT"
+          else
+            echo "run=none" >> "$GITHUB_OUTPUT"
+          fi
+
+  generate:
+    needs: decide
+    if: needs.decide.outputs.run == 'generate'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+      - name: Run batched morning pipeline
+        env:
+          # PIPELINE_MODE is forced to prod by the script (Batch needs the API).
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          PIPELINE_DAILY_BUDGET_USD: ${{ vars.PIPELINE_DAILY_BUDGET_USD || '0.50' }}
+          EMBER_API_KEY: ${{ secrets.EMBER_API_KEY }}
+          EIA_API_KEY: ${{ secrets.EIA_API_KEY }}
+          GFW_API_KEY: ${{ secrets.GFW_API_KEY }}
+          NOAA_API_KEY: ${{ secrets.NOAA_API_KEY }}
+          IUCN_API_KEY: ${{ secrets.IUCN_API_KEY }}
+          NLR_API_KEY: ${{ secrets.NLR_API_KEY }}
+          NOTION_TOKEN: ${{ secrets.NOTION_TOKEN }}
+        run: python scripts/run_pipeline_batched.py --max-stories 5
+
+  publish-learn:
+    needs: decide
+    if: needs.decide.outputs.run == 'publish-learn'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write   # to commit updated feedback_rules.yaml back to this repo
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+      - name: Publish approved drafts (Notion -> GitHub -> Vercel)
+        env:
+          NOTION_TOKEN: ${{ secrets.NOTION_TOKEN }}
+          WEBSITE_GITHUB_TOKEN: ${{ secrets.WEBSITE_GITHUB_TOKEN }}
+        run: python scripts/publish_approved.py
+      - name: Learn writing rules from rejections
+        env:
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          NOTION_TOKEN: ${{ secrets.NOTION_TOKEN }}
+        run: python scripts/process_feedback.py
+      - name: Commit updated feedback rules
+        run: |
+          if git diff --quiet -- config/feedback_rules.yaml; then
+            echo "No feedback-rule changes to commit."
+          else
+            git config user.name "gce-bot"
+            git config user.email "gce-bot@users.noreply.github.com"
+            git add config/feedback_rules.yaml
+            git commit -m "chore: update learned feedback rules [skip ci]"
+            git push
+          fi

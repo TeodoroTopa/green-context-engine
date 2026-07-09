@@ -59,13 +59,34 @@ All agents go through the `claude` CLI proxy (`pipeline/claude_code_client.py`),
 
 Editor allows editorial characterizations (e.g., "nearly double" for 1.83x) but catches fabricated data. Total: 3-5 calls per story.
 
-## Daily Workflow (Windows Task Scheduler)
+## Daily Workflow — autonomous (GitHub Actions, API mode)
 
-**Morning** — `scripts/generate_drafts.bat`: runs pipeline once per source, generates one draft each. Drafts appear in Notion as "Review".
+Runs unattended in the cloud; no PC required. One workflow —
+`.github/workflows/pipeline.yml` — ticks hourly; a `decide` job checks the
+actual **US Eastern** hour and launches the matching run. Times are the two env
+knobs at the top of that file (`MORNING_HOUR_ET` / `EVENING_HOUR_ET`) — edit one
+line to reschedule; DST is handled automatically (no UTC math). Manual runs:
+Actions tab → "Run workflow" → pick `generate` or `publish-learn`.
 
-**Afternoon** — `scripts/publish_and_learn.bat`:
-1. Publishes approved drafts to website via GitHub API → Vercel rebuild
-2. Reads rejected drafts + feedback from Notion, extracts generalized writing rules via Claude, saves to `config/feedback_rules.yaml`, archives processed rejections
+**7am ET — `generate` job** → `scripts/run_pipeline_batched.py`:
+`Pipeline.run_batched()` discovers/enriches stories, then drafts and edits via
+the **Message Batches API** (50% off) for the two Sonnet stages. Drafts land in
+Notion as "Review". A `BudgetGuard` (env `PIPELINE_DAILY_BUDGET_USD`, default
+`$0.50`) aborts before any over-cap batch.
+
+**7pm ET — `publish-learn` job**:
+1. `publish_approved.py` — publishes approved drafts to the website via GitHub API → Vercel.
+2. `process_feedback.py` — learns writing rules from rejections into `config/feedback_rules.yaml`.
+3. Commits the updated `feedback_rules.yaml` back to this repo so the next morning's drafts use it (ephemeral runners don't persist local state; Notion is the source of truth for everything else).
+
+**Cost control:** per-stage model tiering in `config/models.yaml` (Haiku for
+selector/strategist/verifier, Sonnet for drafter/editor) + Batch (50%) keeps
+the day well under $0.50. `pipeline/usage.py` prices per model; the Sonnet
+stages go through Batch, the Haiku stages run synchronously.
+
+**Local / legacy:** the Windows `.bat` files + `PIPELINE_MODE=local` CLI proxy
+still work for free local dev (subscription auth, no API billing, no Batch).
+`scripts/run_pipeline.py` is the synchronous (non-batched) runner.
 
 The drafter loads `feedback_rules.yaml` at runtime, so the pipeline learns from rejections over time.
 
@@ -112,10 +133,14 @@ pytest tests/
 | `NOAA_API_KEY` | optional | NOAA climate data |
 | `NOTION_TOKEN` | optional | Editorial queue (Notion Plus) |
 | `WEBSITE_GITHUB_TOKEN` | optional | Publish to website repo |
-| `PIPELINE_MODE` | optional | `dev`/`local` = claude CLI proxy (no API billing) |
+| `ANTHROPIC_API_KEY` | yes (prod/API mode) | Paid API auth for scheduled cloud runs (`PIPELINE_MODE` unset/`prod`) |
+| `PIPELINE_DAILY_BUDGET_USD` | optional | Daily spend cap for the batched run (default `0.50`) |
+| `PIPELINE_MODE` | optional | `dev`/`local` = claude CLI proxy (free, no API billing); unset/`prod` = paid API |
 | `PIPELINE_CLAUDE_MODEL` | yes (when proxy used) | Model for the CLI proxy (alias like `opus`/`sonnet` or full ID like `claude-opus-4-7`) |
 | `PIPELINE_CLAUDE_EFFORT` | yes (when proxy used) | Effort level for the CLI proxy (`low`/`medium`/`high`/`xhigh`/`max`) |
 | `PIPELINE_CLAUDE_TIMEOUT` | yes (when proxy used) | Subprocess timeout in seconds for each CLI call (positive integer) |
+
+Per-stage models live in `config/models.yaml` (used in API mode; ignored by the CLI proxy).
 
 ## Notes for Claude Code
 
