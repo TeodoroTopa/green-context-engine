@@ -1,0 +1,56 @@
+name: Generate drafts (7am ET)
+
+# Morning run: scrape RSS, enrich, and build summaries via the batched
+# (Sonnet drafter+editor through the Batch API) pipeline. Drafts land in
+# Notion as "Review". GitHub Actions cron is UTC and has no DST, so we fire
+# at both offsets and gate on the actual New York hour.
+on:
+  schedule:
+    - cron: "0 11,12 * * *"   # 07:00 EDT (11 UTC) and 07:00 EST (12 UTC)
+  workflow_dispatch: {}         # manual trigger (bypasses the hour gate)
+
+concurrency:
+  group: generate
+  cancel-in-progress: false
+
+jobs:
+  gate:
+    runs-on: ubuntu-latest
+    outputs:
+      proceed: ${{ steps.check.outputs.proceed }}
+    steps:
+      - id: check
+        run: |
+          hour=$(TZ=America/New_York date +%H)
+          echo "New York hour: $hour"
+          if [ "$hour" = "07" ]; then
+            echo "proceed=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "proceed=false" >> "$GITHUB_OUTPUT"
+          fi
+
+  generate:
+    needs: gate
+    if: needs.gate.outputs.proceed == 'true' || github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+      - name: Run batched morning pipeline
+        env:
+          # PIPELINE_MODE is forced to prod by the script (Batch needs the API).
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          PIPELINE_DAILY_BUDGET_USD: ${{ vars.PIPELINE_DAILY_BUDGET_USD || '0.50' }}
+          EMBER_API_KEY: ${{ secrets.EMBER_API_KEY }}
+          EIA_API_KEY: ${{ secrets.EIA_API_KEY }}
+          GFW_API_KEY: ${{ secrets.GFW_API_KEY }}
+          NOAA_API_KEY: ${{ secrets.NOAA_API_KEY }}
+          IUCN_API_KEY: ${{ secrets.IUCN_API_KEY }}
+          NLR_API_KEY: ${{ secrets.NLR_API_KEY }}
+          NOTION_TOKEN: ${{ secrets.NOTION_TOKEN }}
+        run: python scripts/run_pipeline_batched.py --max-stories 5

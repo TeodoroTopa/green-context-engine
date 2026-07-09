@@ -1,0 +1,65 @@
+name: Publish + learn (7pm ET)
+
+# Evening run: publish Notion-approved drafts to the website (GitHub -> Vercel),
+# then learn writing rules from rejections into config/feedback_rules.yaml and
+# commit that data file back so the next morning's drafts pick it up.
+on:
+  schedule:
+    - cron: "0 23,0 * * *"   # 19:00 EDT (23 UTC) and 19:00 EST (00 UTC)
+  workflow_dispatch: {}
+
+concurrency:
+  group: publish-learn
+  cancel-in-progress: false
+
+jobs:
+  gate:
+    runs-on: ubuntu-latest
+    outputs:
+      proceed: ${{ steps.check.outputs.proceed }}
+    steps:
+      - id: check
+        run: |
+          hour=$(TZ=America/New_York date +%H)
+          echo "New York hour: $hour"
+          if [ "$hour" = "19" ]; then
+            echo "proceed=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "proceed=false" >> "$GITHUB_OUTPUT"
+          fi
+
+  publish-learn:
+    needs: gate
+    if: needs.gate.outputs.proceed == 'true' || github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write   # to commit updated feedback_rules.yaml back to this repo
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+      - name: Publish approved drafts (Notion -> GitHub -> Vercel)
+        env:
+          NOTION_TOKEN: ${{ secrets.NOTION_TOKEN }}
+          WEBSITE_GITHUB_TOKEN: ${{ secrets.WEBSITE_GITHUB_TOKEN }}
+        run: python scripts/publish_approved.py
+      - name: Learn writing rules from rejections
+        env:
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          NOTION_TOKEN: ${{ secrets.NOTION_TOKEN }}
+        run: python scripts/process_feedback.py
+      - name: Commit updated feedback rules
+        run: |
+          if git diff --quiet -- config/feedback_rules.yaml; then
+            echo "No feedback-rule changes to commit."
+          else
+            git config user.name "gce-bot"
+            git config user.email "gce-bot@users.noreply.github.com"
+            git add config/feedback_rules.yaml
+            git commit -m "chore: update learned feedback rules [skip ci]"
+            git push
+          fi
