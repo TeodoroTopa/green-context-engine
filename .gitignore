@@ -16,7 +16,8 @@ build/
 data/cache/
 
 # Draft content — Notion is the source of truth
-content/
+# (anchored to repo root so it does NOT match the pipeline/content package)
+/content/
 
 # Scheduled run logs
 logs/
