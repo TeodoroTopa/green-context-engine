@@ -9,7 +9,7 @@ RSS feeds → Monitor (keyword filter, Notion-based dedup)
          → Article Selector (AI picks stories best served by available data)
          → Article Fetcher (trafilatura extracts full text from article URL)
          → Data Strategist (AI picks sources/entities/data_types to fetch)
-         → Enricher (parallel fetch from Ember, EIA, GFW, NOAA)
+         → Enricher (parallel fetch from Ember, EIA, GFW, NOAA, IUCN, NLR, Open-Meteo, UK Carbon Intensity)
          → Drafter (200-250 word brief with bold lead-in structure)
          → Editor (pass / fix / fail — fixes issues directly when possible)
          → Verification (read-only check after editor fixes)
@@ -18,6 +18,7 @@ RSS feeds → Monitor (keyword filter, Notion-based dedup)
 
 ## Key Directories
 
+- `pipeline/monitors/` — RSS monitor (keyword filter, Notion-based dedup)
 - `pipeline/sources/` — data connectors (BaseSource interface, `**kwargs` for selective `data_types`)
 - `pipeline/analysis/` — article selector, data strategist, enricher, catalog loader
 - `pipeline/content/` — article text fetcher (trafilatura)
@@ -34,6 +35,10 @@ RSS feeds → Monitor (keyword filter, Notion-based dedup)
 | **EIA** | US electricity generation by fuel type with % breakdown | US national + 50 states |
 | **GFW** | Tree cover loss, deforestation drivers, forest carbon emissions | Global, country-level |
 | **NOAA** | Yearly/monthly temp, precip, heating/cooling degree days | 180+ countries, US states |
+| **IUCN** | Threatened species counts by threat category | Global (key not yet configured — connector ready) |
+| **NLR** | Solar resource (GHI/DNI) and PVWatts production estimates | US national + 50 states |
+| **Open-Meteo** | Historical solar radiation, wind speed, temperature, precipitation (no key required) | Global, capital-city proxy |
+| **UK Carbon Intensity** | Real-time carbon intensity and generation mix at 30-min resolution (no key required) | Great Britain only |
 
 ### Adding a New Source
 
@@ -137,6 +142,8 @@ pytest tests/
 | `EIA_API_KEY` | yes | EIA US electricity data |
 | `GFW_API_KEY` | optional | Global Forest Watch |
 | `NOAA_API_KEY` | optional | NOAA climate data |
+| `IUCN_API_KEY` | optional | IUCN Red List threatened species data (not yet configured) |
+| `NLR_API_KEY` | optional | NLR solar resource / PVWatts data |
 | `NOTION_TOKEN` | optional | Editorial queue (Notion Plus) |
 | `WEBSITE_GITHUB_TOKEN` | optional | Publish to website repo |
 | `ANTHROPIC_API_KEY` | yes (prod/API mode) | Paid API auth for scheduled cloud runs (`PIPELINE_MODE` unset/`prod`) |

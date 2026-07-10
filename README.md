@@ -4,11 +4,11 @@ An automated AI pipeline that monitors renewable energy and climate news, enrich
 
 ## See it live
 
-Published briefs are live at **[teodorotopa.com](https://teodorotopa.com)**, under `/energy/{slug}`.
+Published briefs are live at **[www.teodorotopa.com/energy](https://www.teodorotopa.com/energy)**.
 
 ## What it does
 
-Every day the pipeline scans a curated set of energy/climate news feeds, picks the stories best supported by available public data, pulls in relevant numbers from sources like Ember, EIA, GFW, and NOAA, and has Claude draft and fact-check a short brief grounded in that data. Nothing publishes automatically — every brief sits in a Notion queue until a human reviews it. Only after that manual approval does it get pushed to the live site.
+Every day the pipeline scans a curated set of energy/climate news feeds, picks the stories best supported by available public data, pulls in relevant numbers from sources like Ember, EIA, GFW, NOAA, and Open-Meteo, and has Claude draft and fact-check a short brief grounded in that data. Nothing publishes automatically — every brief sits in a Notion queue until a human reviews it. Only after that manual approval does it get pushed to the live site.
 
 ## How it works
 
@@ -17,7 +17,7 @@ RSS feeds → Monitor (keyword filter, dedup)
          → Article Selector (AI picks stories best served by available data)
          → Article Fetcher (full article text)
          → Data Strategist (AI picks which data sources/entities to fetch)
-         → Enricher (parallel fetch from Ember, EIA, GFW, NOAA)
+         → Enricher (parallel fetch from Ember, EIA, GFW, NOAA, IUCN, NLR, Open-Meteo, UK Carbon Intensity)
          → Drafter (writes the brief)
          → Editor (fact-checks, fixes issues directly)
          → Verification (final read-only check)
@@ -47,6 +47,10 @@ Every draft is a page in a Notion database — the editorial queue — with a `S
 | **EIA** | US electricity generation by fuel type, % breakdown | US national + 50 states |
 | **GFW** | Tree cover loss, deforestation drivers, forest carbon emissions | Global, country-level |
 | **NOAA** | Yearly/monthly temperature, precipitation, heating/cooling degree days | 180+ countries, US states |
+| **IUCN** | Threatened species counts by threat category | Global |
+| **NLR** | Solar resource (GHI/DNI) and PVWatts production estimates | US national + 50 states |
+| **Open-Meteo** | Historical solar radiation, wind speed, temperature, precipitation | Global |
+| **UK Carbon Intensity** | Real-time carbon intensity and generation mix, 30-min resolution | Great Britain |
 
 ## Tech stack
 
