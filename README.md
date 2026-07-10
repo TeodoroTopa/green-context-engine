@@ -8,7 +8,7 @@ Published briefs are live at **[www.teodorotopa.com/energy](https://www.teodorot
 
 ## What it does
 
-On selected days each week, the pipeline scans a curated set of energy/climate news feeds, picks the stories best supported by available public data, pulls in relevant numbers from sources like Ember, EIA, GFW, NOAA, and Open-Meteo, and has Claude draft and fact-check a short brief grounded in that data — for less than $0.25 a run. Nothing publishes automatically — every brief sits in a Notion queue until a human reviews it. Only after that manual approval does it get pushed to the live site.
+Once a week, the pipeline scans a curated set of energy/climate news feeds, picks the stories best supported by available public data, pulls in relevant numbers from sources like Ember, EIA, GFW, NOAA, and Open-Meteo, and has Claude draft and fact-check a short brief grounded in that data — for less than $0.25 a run. Nothing publishes automatically — every brief sits in a Notion queue until a human reviews it. Only after that manual approval does it get pushed to the live site.
 
 ## How it works
 
@@ -28,12 +28,12 @@ Each story goes through a small pipeline of specialized AI agents (selector, str
 
 ## Fully automated via GitHub Actions
 
-The entire operation runs unattended in the cloud — no local machine required. Two scheduled workflows drive everything, firing only on selected days that the owner picks — **currently Monday and Thursday**:
+The entire operation runs unattended in the cloud — no local machine required. Two scheduled workflows drive everything, firing only on a day the owner picks — **currently Monday**:
 
-- **[`generate.yml`](.github/workflows/generate.yml)** runs at 11:00 UTC on scheduled days. It discovers new stories, enriches them with data, and drafts + edits briefs via Claude (using the Message Batches API for cost savings). Finished drafts land in Notion with status `Review`. A per-run budget guard (default $0.50) would abort the run before any over-cap spend, though a typical run costs well under $0.25.
-- **[`publish-learn.yml`](.github/workflows/publish-learn.yml)** runs at 23:00 UTC on scheduled days. It publishes anything a human has approved in Notion out to the live website (via the GitHub API, which triggers a Vercel rebuild), and separately reads feedback left on any rejected drafts to learn writing rules for next time — committing those learned rules back into the repo so the next scheduled run's drafts improve.
+- **[`generate.yml`](.github/workflows/generate.yml)** runs at 11:00 UTC on the scheduled day. It discovers new stories, enriches them with data, and drafts + edits briefs via Claude (using the Message Batches API for cost savings). Finished drafts land in Notion with status `Review`. A per-run budget guard (default $0.50) would abort the run before any over-cap spend, though a typical run costs well under $0.25.
+- **[`publish-learn.yml`](.github/workflows/publish-learn.yml)** runs at 23:00 UTC on the scheduled day. It publishes anything a human has approved in Notion out to the live website (via the GitHub API, which triggers a Vercel rebuild), and separately reads feedback left on any rejected drafts to learn writing rules for next time — committing those learned rules back into the repo so the next scheduled run's drafts improve.
 
-Together the two workflows form a closed loop: generate → wait for human review → publish approved work → learn from rejected work → generate again, better, next time. The schedule is just two cron lines in the workflow files, so which days it runs is easy to change.
+Together the two workflows form a closed loop: generate → wait for human review → publish approved work → learn from rejected work → generate again, better, next time. The schedule is just two cron lines in the workflow files, so which day(s) it runs is easy to change.
 
 ## Human review in Notion
 

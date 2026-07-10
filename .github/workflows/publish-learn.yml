@@ -1,19 +1,19 @@
 name: Energy Context Engine — publish & learn
 
-# Runs on selected days only (currently Monday and Thursday): publish
-# approved drafts + learn from rejections.
+# Runs on a selected day only (currently Monday): publish approved
+# drafts + learn from rejections.
 #
 # Cron is fixed UTC (GitHub Actions has no DST awareness), chosen so the
 # run lands at 7pm during Eastern Daylight Time (Mar-Nov) and 6pm during
 # Eastern Standard Time (Nov-Mar) — always :00 on the ET clock, just an
-# hour earlier in winter. To change the time or the days it runs, edit the
+# hour earlier in winter. To change the time or the day(s) it runs, edit the
 # single cron line below (day-of-week field: 0=Sun ... 6=Sat).
 #
 # To run right now: Actions tab → this workflow → "Run workflow".
 
 on:
   schedule:
-    - cron: "0 23 * * 1,4"   # 23:00 UTC Mon/Thu = 7pm EDT / 6pm EST
+    - cron: "0 23 * * 1"   # 23:00 UTC Mon = 7pm EDT / 6pm EST
   workflow_dispatch:
 
 concurrency:

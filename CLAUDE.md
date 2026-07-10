@@ -68,18 +68,18 @@ Editor allows editorial characterizations (e.g., "nearly double" for 1.83x) but 
 
 Runs unattended in the cloud; no PC required. Two independent scheduled
 workflows, each a single fixed UTC cron (no gating job, no TZ conversion),
-firing only on **selected days — currently Monday and Thursday** (owner-
-configurable; not a daily job):
+firing only on a **selected day — currently Monday** (owner-configurable;
+not a daily job):
 
-- `.github/workflows/generate.yml` — cron `"0 11 * * 1,4"` (11:00 UTC, Mon/Thu).
-- `.github/workflows/publish-learn.yml` — cron `"0 23 * * 1,4"` (23:00 UTC, Mon/Thu).
+- `.github/workflows/generate.yml` — cron `"0 11 * * 1"` (11:00 UTC, Mon).
+- `.github/workflows/publish-learn.yml` — cron `"0 23 * * 1"` (23:00 UTC, Mon).
 
 These land at **7am/7pm during Eastern Daylight Time** (Mar–Nov) and
 **6am/6pm during Eastern Standard Time** (Nov–Mar) — always on the hour ET,
 just an hour earlier in winter (GitHub Actions cron has no DST awareness;
 this drift is an accepted trade-off for a simple, gate-free schedule). To
-change which days it runs or reschedule the time, edit the single cron line
-in the relevant file (day-of-week field: 0=Sun ... 6=Sat). Manual runs:
+change which day(s) it runs or reschedule the time, edit the single cron
+line in the relevant file (day-of-week field: 0=Sun ... 6=Sat). Manual runs:
 Actions tab → pick the workflow → "Run workflow".
 
 **`generate.yml`** → `scripts/run_pipeline_batched.py`:
@@ -98,10 +98,10 @@ not the typical cost (see below).
 selector/strategist/verifier, Sonnet for drafter/editor) + Batch (50%) keeps
 typical runs **under $0.25** — well below the $0.50 abort ceiling.
 `pipeline/usage.py` prices per model; the Sonnet stages go through Batch, the
-Haiku stages run synchronously. Running only 2x/week instead of daily further
+Haiku stages run synchronously. Running only weekly instead of daily further
 cuts total spend; note `--max-stories 5` per run means more than 5 relevant
-stories accumulating between Thursday and Monday will roll over rather than
-all being processed in one run.
+stories accumulating over the week will roll over rather than all being
+processed in one run.
 
 **Local / legacy:** the Windows `.bat` files + `PIPELINE_MODE=local` CLI proxy
 still work for free local dev (subscription auth, no API billing, no Batch).
