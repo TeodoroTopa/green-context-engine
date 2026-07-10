@@ -17,7 +17,7 @@ RSS feeds → Monitor (keyword filter, dedup)
          → Article Selector (AI picks stories best served by available data)
          → Article Fetcher (full article text)
          → Data Strategist (AI picks which data sources/entities to fetch)
-         → Enricher (parallel fetch from Ember, EIA, GFW, NOAA, IUCN, NLR, Open-Meteo, UK Carbon Intensity)
+         → Enricher (parallel fetch from Ember, EIA, GFW, NOAA, NLR, Open-Meteo, UK Carbon Intensity)
          → Drafter (writes the brief)
          → Editor (fact-checks, fixes issues directly)
          → Verification (final read-only check)
@@ -47,7 +47,7 @@ Every draft is a page in a Notion database — the editorial queue — with a `S
 | **EIA** | US electricity generation by fuel type, % breakdown | US national + 50 states |
 | **GFW** | Tree cover loss, deforestation drivers, forest carbon emissions | Global, country-level |
 | **NOAA** | Yearly/monthly temperature, precipitation, heating/cooling degree days | 180+ countries, US states |
-| **IUCN** | Threatened species counts by threat category | Global |
+| **IUCN** | Threatened species counts by threat category | Global — not yet active (API key not configured) |
 | **NLR** | Solar resource (GHI/DNI) and PVWatts production estimates | US national + 50 states |
 | **Open-Meteo** | Historical solar radiation, wind speed, temperature, precipitation | Global |
 | **UK Carbon Intensity** | Real-time carbon intensity and generation mix, 30-min resolution | Great Britain |
