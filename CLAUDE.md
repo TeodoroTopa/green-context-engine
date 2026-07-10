@@ -61,20 +61,26 @@ Editor allows editorial characterizations (e.g., "nearly double" for 1.83x) but 
 
 ## Daily Workflow — autonomous (GitHub Actions, API mode)
 
-Runs unattended in the cloud; no PC required. One workflow —
-`.github/workflows/pipeline.yml` — ticks hourly; a `decide` job checks the
-actual **US Eastern** hour and launches the matching run. Times are the two env
-knobs at the top of that file (`MORNING_HOUR_ET` / `EVENING_HOUR_ET`) — edit one
-line to reschedule; DST is handled automatically (no UTC math). Manual runs:
-Actions tab → "Run workflow" → pick `generate` or `publish-learn`.
+Runs unattended in the cloud; no PC required. Two independent scheduled
+workflows, each a single fixed UTC cron (no gating job, no TZ conversion):
 
-**7am ET — `generate` job** → `scripts/run_pipeline_batched.py`:
+- `.github/workflows/generate.yml` — cron `"0 11 * * *"` (11:00 UTC).
+- `.github/workflows/publish-learn.yml` — cron `"0 23 * * *"` (23:00 UTC).
+
+These land at **7am/7pm during Eastern Daylight Time** (Mar–Nov) and
+**6am/6pm during Eastern Standard Time** (Nov–Mar) — always on the hour ET,
+just an hour earlier in winter (GitHub Actions cron has no DST awareness;
+this drift is an accepted trade-off for a simple, gate-free schedule). To
+reschedule, edit the single cron line in the relevant file. Manual runs:
+Actions tab → pick the workflow → "Run workflow".
+
+**`generate.yml`** → `scripts/run_pipeline_batched.py`:
 `Pipeline.run_batched()` discovers/enriches stories, then drafts and edits via
 the **Message Batches API** (50% off) for the two Sonnet stages. Drafts land in
 Notion as "Review". A `BudgetGuard` (env `PIPELINE_DAILY_BUDGET_USD`, default
 `$0.50`) aborts before any over-cap batch.
 
-**7pm ET — `publish-learn` job**:
+**`publish-learn.yml`**:
 1. `publish_approved.py` — publishes approved drafts to the website via GitHub API → Vercel.
 2. `process_feedback.py` — learns writing rules from rejections into `config/feedback_rules.yaml`.
 3. Commits the updated `feedback_rules.yaml` back to this repo so the next morning's drafts use it (ephemeral runners don't persist local state; Notion is the source of truth for everything else).

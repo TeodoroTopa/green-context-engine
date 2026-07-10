@@ -1,0 +1,45 @@
+name: Energy Context Engine — generate
+
+# Runs once a day: scrape + build summaries (batched, API mode).
+#
+# Cron is fixed UTC (GitHub Actions has no DST awareness), chosen so the
+# run lands at 7am during Eastern Daylight Time (Mar-Nov) and 6am during
+# Eastern Standard Time (Nov-Mar) — always :00 on the ET clock, just an
+# hour earlier in winter. To change the time, edit the single cron line
+# below.
+#
+# To run right now: Actions tab → this workflow → "Run workflow".
+
+on:
+  schedule:
+    - cron: "0 11 * * *"   # 11:00 UTC = 7am EDT / 6am EST
+  workflow_dispatch:
+
+concurrency:
+  group: energy-context-engine-generate
+  cancel-in-progress: false
+
+jobs:
+  generate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+      - name: Run batched morning pipeline
+        env:
+          # PIPELINE_MODE is forced to prod by the script (Batch needs the API).
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          PIPELINE_DAILY_BUDGET_USD: ${{ vars.PIPELINE_DAILY_BUDGET_USD || '0.50' }}
+          EMBER_API_KEY: ${{ secrets.EMBER_API_KEY }}
+          EIA_API_KEY: ${{ secrets.EIA_API_KEY }}
+          GFW_API_KEY: ${{ secrets.GFW_API_KEY }}
+          NOAA_API_KEY: ${{ secrets.NOAA_API_KEY }}
+          IUCN_API_KEY: ${{ secrets.IUCN_API_KEY }}
+          NLR_API_KEY: ${{ secrets.NLR_API_KEY }}
+          NOTION_TOKEN: ${{ secrets.NOTION_TOKEN }}
+        run: python scripts/run_pipeline_batched.py --max-stories 5

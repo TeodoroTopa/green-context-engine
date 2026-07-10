@@ -1,0 +1,55 @@
+name: Energy Context Engine — publish & learn
+
+# Runs once a day: publish approved drafts + learn from rejections.
+#
+# Cron is fixed UTC (GitHub Actions has no DST awareness), chosen so the
+# run lands at 7pm during Eastern Daylight Time (Mar-Nov) and 6pm during
+# Eastern Standard Time (Nov-Mar) — always :00 on the ET clock, just an
+# hour earlier in winter. To change the time, edit the single cron line
+# below.
+#
+# To run right now: Actions tab → this workflow → "Run workflow".
+
+on:
+  schedule:
+    - cron: "0 23 * * *"   # 23:00 UTC = 7pm EDT / 6pm EST
+  workflow_dispatch:
+
+concurrency:
+  group: energy-context-engine-publish-learn
+  cancel-in-progress: false
+
+jobs:
+  publish-learn:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write   # to commit updated feedback_rules.yaml back to this repo
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+      - name: Publish approved drafts (Notion -> GitHub -> Vercel)
+        env:
+          NOTION_TOKEN: ${{ secrets.NOTION_TOKEN }}
+          WEBSITE_GITHUB_TOKEN: ${{ secrets.WEBSITE_GITHUB_TOKEN }}
+        run: python scripts/publish_approved.py
+      - name: Learn writing rules from rejections
+        env:
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          NOTION_TOKEN: ${{ secrets.NOTION_TOKEN }}
+        run: python scripts/process_feedback.py
+      - name: Commit updated feedback rules
+        run: |
+          if git diff --quiet -- config/feedback_rules.yaml; then
+            echo "No feedback-rule changes to commit."
+          else
+            git config user.name "gce-bot"
+            git config user.email "gce-bot@users.noreply.github.com"
+            git add config/feedback_rules.yaml
+            git commit -m "chore: update learned feedback rules [skip ci]"
+            git push
+          fi
