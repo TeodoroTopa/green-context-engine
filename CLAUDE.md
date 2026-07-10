@@ -9,7 +9,7 @@ RSS feeds → Monitor (keyword filter, Notion-based dedup)
          → Article Selector (AI picks stories best served by available data)
          → Article Fetcher (trafilatura extracts full text from article URL)
          → Data Strategist (AI picks sources/entities/data_types to fetch)
-         → Enricher (parallel fetch from Ember, EIA, GFW, NOAA)
+         → Enricher (parallel fetch from Ember, EIA, GFW, NOAA, NLR, Open-Meteo, UK Carbon Intensity)
          → Drafter (200-250 word brief with bold lead-in structure)
          → Editor (pass / fix / fail — fixes issues directly when possible)
          → Verification (read-only check after editor fixes)
@@ -18,6 +18,7 @@ RSS feeds → Monitor (keyword filter, Notion-based dedup)
 
 ## Key Directories
 
+- `pipeline/monitors/` — RSS monitor (keyword filter, Notion-based dedup)
 - `pipeline/sources/` — data connectors (BaseSource interface, `**kwargs` for selective `data_types`)
 - `pipeline/analysis/` — article selector, data strategist, enricher, catalog loader
 - `pipeline/content/` — article text fetcher (trafilatura)
@@ -34,6 +35,10 @@ RSS feeds → Monitor (keyword filter, Notion-based dedup)
 | **EIA** | US electricity generation by fuel type with % breakdown | US national + 50 states |
 | **GFW** | Tree cover loss, deforestation drivers, forest carbon emissions | Global, country-level |
 | **NOAA** | Yearly/monthly temp, precip, heating/cooling degree days | 180+ countries, US states |
+| **IUCN** | Threatened species counts by threat category | Global — not yet active (API key not configured) |
+| **NLR** | Solar resource (GHI/DNI) and PVWatts production estimates | US national + 50 states |
+| **Open-Meteo** | Historical solar radiation, wind speed, temperature, precipitation (no key required) | Global, capital-city proxy |
+| **UK Carbon Intensity** | Real-time carbon intensity and generation mix at 30-min resolution (no key required) | Great Britain only |
 
 ### Adding a New Source
 
@@ -59,36 +64,44 @@ All agents go through the `claude` CLI proxy (`pipeline/claude_code_client.py`),
 
 Editor allows editorial characterizations (e.g., "nearly double" for 1.83x) but catches fabricated data. Total: 3-5 calls per story.
 
-## Daily Workflow — autonomous (GitHub Actions, API mode)
+## Scheduled Workflow — autonomous (GitHub Actions, API mode)
 
 Runs unattended in the cloud; no PC required. Two independent scheduled
-workflows, each a single fixed UTC cron (no gating job, no TZ conversion):
+workflows, each a single fixed UTC cron (no gating job, no TZ conversion),
+firing only on a **selected day — currently Monday** (owner-configurable;
+not a daily job):
 
-- `.github/workflows/generate.yml` — cron `"0 11 * * *"` (11:00 UTC).
-- `.github/workflows/publish-learn.yml` — cron `"0 23 * * *"` (23:00 UTC).
+- `.github/workflows/generate.yml` — cron `"0 11 * * 1"` (11:00 UTC, Mon).
+- `.github/workflows/publish-learn.yml` — cron `"0 23 * * 1"` (23:00 UTC, Mon).
 
 These land at **7am/7pm during Eastern Daylight Time** (Mar–Nov) and
 **6am/6pm during Eastern Standard Time** (Nov–Mar) — always on the hour ET,
 just an hour earlier in winter (GitHub Actions cron has no DST awareness;
 this drift is an accepted trade-off for a simple, gate-free schedule). To
-reschedule, edit the single cron line in the relevant file. Manual runs:
+change which day(s) it runs or reschedule the time, edit the single cron
+line in the relevant file (day-of-week field: 0=Sun ... 6=Sat). Manual runs:
 Actions tab → pick the workflow → "Run workflow".
 
 **`generate.yml`** → `scripts/run_pipeline_batched.py`:
 `Pipeline.run_batched()` discovers/enriches stories, then drafts and edits via
 the **Message Batches API** (50% off) for the two Sonnet stages. Drafts land in
 Notion as "Review". A `BudgetGuard` (env `PIPELINE_DAILY_BUDGET_USD`, default
-`$0.50`) aborts before any over-cap batch.
+`$0.50`) aborts before any over-cap batch — this is a per-run safety ceiling,
+not the typical cost (see below).
 
 **`publish-learn.yml`**:
 1. `publish_approved.py` — publishes approved drafts to the website via GitHub API → Vercel.
 2. `process_feedback.py` — learns writing rules from rejections into `config/feedback_rules.yaml`.
-3. Commits the updated `feedback_rules.yaml` back to this repo so the next morning's drafts use it (ephemeral runners don't persist local state; Notion is the source of truth for everything else).
+3. Commits the updated `feedback_rules.yaml` back to this repo so the next scheduled `generate.yml` run uses it (ephemeral runners don't persist local state; Notion is the source of truth for everything else).
 
 **Cost control:** per-stage model tiering in `config/models.yaml` (Haiku for
 selector/strategist/verifier, Sonnet for drafter/editor) + Batch (50%) keeps
-the day well under $0.50. `pipeline/usage.py` prices per model; the Sonnet
-stages go through Batch, the Haiku stages run synchronously.
+typical runs **under $0.25** — well below the $0.50 abort ceiling.
+`pipeline/usage.py` prices per model; the Sonnet stages go through Batch, the
+Haiku stages run synchronously. Running only weekly instead of daily further
+cuts total spend; note `--max-stories 5` per run means more than 5 relevant
+stories accumulating over the week will roll over rather than all being
+processed in one run.
 
 **Local / legacy:** the Windows `.bat` files + `PIPELINE_MODE=local` CLI proxy
 still work for free local dev (subscription auth, no API billing, no Batch).
@@ -137,10 +150,12 @@ pytest tests/
 | `EIA_API_KEY` | yes | EIA US electricity data |
 | `GFW_API_KEY` | optional | Global Forest Watch |
 | `NOAA_API_KEY` | optional | NOAA climate data |
+| `IUCN_API_KEY` | optional | IUCN Red List threatened species data (not yet configured) |
+| `NLR_API_KEY` | optional | NLR solar resource / PVWatts data |
 | `NOTION_TOKEN` | optional | Editorial queue (Notion Plus) |
 | `WEBSITE_GITHUB_TOKEN` | optional | Publish to website repo |
 | `ANTHROPIC_API_KEY` | yes (prod/API mode) | Paid API auth for scheduled cloud runs (`PIPELINE_MODE` unset/`prod`) |
-| `PIPELINE_DAILY_BUDGET_USD` | optional | Daily spend cap for the batched run (default `0.50`) |
+| `PIPELINE_DAILY_BUDGET_USD` | optional | Per-run spend cap for the batched run (default `0.50`; typical run costs under $0.25) |
 | `PIPELINE_MODE` | optional | `dev`/`local` = claude CLI proxy (free, no API billing); unset/`prod` = paid API |
 | `PIPELINE_CLAUDE_MODEL` | yes (when proxy used) | Model for the CLI proxy (alias like `opus`/`sonnet` or full ID like `claude-opus-4-7`) |
 | `PIPELINE_CLAUDE_EFFORT` | yes (when proxy used) | Effort level for the CLI proxy (`low`/`medium`/`high`/`xhigh`/`max`) |
