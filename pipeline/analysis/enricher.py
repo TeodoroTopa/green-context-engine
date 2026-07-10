@@ -99,6 +99,7 @@ class EnrichedStory:
     fetch_plan: dict = field(default_factory=dict)
     benchmark_data: dict = field(default_factory=dict)
     data_text: str = ""
+    data_sources: set = field(default_factory=set)
 
 
 class Enricher:
@@ -134,7 +135,7 @@ class Enricher:
         separately (and can itself be batched) before data is fetched.
         """
         # 2. Execute the fetch plan
-        primary_data, benchmark_data = self._execute_plan(fetch_plan)
+        primary_data, benchmark_data, primary_sources = self._execute_plan(fetch_plan)
 
         # 3. Build entities list from primary fetches
         entities = [f["entity"] for f in fetch_plan["fetches"] if f["role"] == "primary"]
@@ -159,19 +160,26 @@ class Enricher:
             fetch_plan=fetch_plan,
             benchmark_data=benchmark_data,
             data_text=data_text,
+            data_sources=primary_sources,
         )
 
-    def _execute_plan(self, plan: dict) -> tuple[dict, dict]:
+    def _execute_plan(self, plan: dict) -> tuple[dict, dict, set]:
         """Execute the strategist's fetch plan, dispatching to the right source.
 
         Fetches run in parallel (ThreadPoolExecutor) since each is an independent
         API call. When multiple sources return data for the same entity, results
         are merged so the drafter sees a combined view.
+
+        Returns (primary_data, benchmark_data, primary_sources) — primary_sources
+        is the set of distinct connector names (e.g. "ember", "gfw") that
+        contributed non-empty primary-role data, used to enforce a minimum
+        number of distinct data providers before drafting.
         """
         from concurrent.futures import ThreadPoolExecutor, as_completed
 
         primary_data = {}
         benchmark_data = {}
+        primary_sources: set = set()
 
         def _fetch_one(fetch: dict):
             source_name = fetch.get("source", "ember")
@@ -188,7 +196,7 @@ class Enricher:
                 if self._is_empty_data(data):
                     logger.debug(f"Empty data from {source_name}/{entity}, skipping")
                     return None
-                return (entity, role, data)
+                return (entity, role, data, source_name)
             except Exception as e:
                 logger.warning(f"Failed to fetch {source_name}/{entity}: {e}")
                 return None
@@ -199,14 +207,16 @@ class Enricher:
             for future in as_completed(futures):
                 result = future.result()
                 if result:
-                    entity, role, data = result
+                    entity, role, data, source_name = result
                     target = primary_data if role == "primary" else benchmark_data
                     if entity in target:
                         target[entity].update(data)
                     else:
                         target[entity] = data
+                    if role == "primary":
+                        primary_sources.add(source_name)
 
-        return primary_data, benchmark_data
+        return primary_data, benchmark_data, primary_sources
 
     @staticmethod
     def _is_empty_data(data: dict) -> bool:
@@ -324,38 +334,39 @@ class Enricher:
                 if total:
                     lines.append(f"  Total assessed: {total}")
 
-            # NOAA: yearly summaries
+            # NOAA: yearly summaries (sorted most-recent-first before slicing —
+            # the raw list order reflects API response order, not recency)
             yearly_temp = context.get("yearly_temperature", [])
             if yearly_temp:
                 lines.append("Yearly temperature (NOAA):")
-                for r in yearly_temp[:9]:
+                for r in sorted(yearly_temp, key=lambda x: x["year"], reverse=True)[:9]:
                     lines.append(f"  {r['year']} {r['type']}: {r['value_celsius']}°C")
             yearly_precip = context.get("yearly_precipitation", [])
             if yearly_precip:
                 lines.append("Yearly precipitation (NOAA):")
-                for r in yearly_precip[:3]:
+                for r in sorted(yearly_precip, key=lambda x: x["year"], reverse=True)[:3]:
                     lines.append(f"  {r['year']}: {r['total_mm']} mm")
             hdd = context.get("heating_degree_days", [])
             if hdd:
                 lines.append("Heating degree days (NOAA):")
-                for r in hdd[:3]:
+                for r in sorted(hdd, key=lambda x: x["year"], reverse=True)[:3]:
                     lines.append(f"  {r['year']}: {r['value']}")
             cdd = context.get("cooling_degree_days", [])
             if cdd:
                 lines.append("Cooling degree days (NOAA):")
-                for r in cdd[:3]:
+                for r in sorted(cdd, key=lambda x: x["year"], reverse=True)[:3]:
                     lines.append(f"  {r['year']}: {r['value']}")
 
-            # NOAA: monthly data (fallback)
+            # NOAA: monthly data (fallback, sorted most-recent-first)
             temp = context.get("temperature", [])
             if temp and isinstance(temp, list):
                 lines.append("Monthly temperature (NOAA):")
-                for r in temp[:6]:
+                for r in sorted(temp, key=lambda x: x["date"], reverse=True)[:6]:
                     lines.append(f"  {r['date']} {r['type']}: {r['value_celsius']}°C")
             precip = context.get("precipitation", [])
             if precip and isinstance(precip, list):
                 lines.append("Monthly precipitation (NOAA):")
-                for r in precip[:6]:
+                for r in sorted(precip, key=lambda x: x["date"], reverse=True)[:6]:
                     lines.append(f"  {r['date']}: {r['value_mm']} mm")
 
             # NLR: solar resource data (US)

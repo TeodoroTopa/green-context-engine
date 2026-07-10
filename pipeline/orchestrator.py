@@ -8,13 +8,14 @@ Usage:
 
 import logging
 import os
+import random
 from pathlib import Path
 
 import yaml
 from anthropic import Anthropic
 from dotenv import load_dotenv
 
-from pipeline.analysis.article_selector import select_best_stories
+from pipeline.analysis.article_selector import cap_by_source, select_best_stories
 from pipeline.analysis.enricher import Enricher
 from pipeline.claude_code_client import ClaudeCodeClient
 from pipeline.content.fetcher import fetch_article_text
@@ -122,6 +123,12 @@ class Pipeline:
         enriched = self.enricher.enrich(story, tracker)
         if not enriched.ember_data:
             raise ValueError(f"No data available for '{story.title}'")
+        if len(enriched.data_sources) < 2:
+            found = ", ".join(enriched.data_sources) or "none"
+            raise ValueError(
+                f"Only {len(enriched.data_sources)} data provider(s) ({found}) "
+                f"for '{story.title}' — need 2+ distinct sources"
+            )
 
         max_draft_attempts = 2
         edit_result = {"verdict": "fail", "summary": "Not checked"}
@@ -200,7 +207,7 @@ class Pipeline:
         Returns:
             List of paths to generated draft files.
         """
-        feeds, keywords = self._load_feeds(source)
+        feeds, keywords, max_per_source = self._load_feeds(source)
         self._feeds_config = feeds  # store for content fetcher
         monitor = RSSMonitor(feeds, relevance_keywords=keywords, skip_dedup=True)
         stories = monitor.check_feeds()
@@ -221,6 +228,10 @@ class Pipeline:
         if not new_stories:
             return []
 
+        # Shuffle so neither the AI ranker nor the fallback below is biased
+        # toward feed-config order (sources listed first would otherwise win).
+        random.shuffle(new_stories)
+
         # Select best stories based on data fit (if more candidates than needed)
         run_tracker = UsageTracker()
         if len(new_stories) > max_stories:
@@ -228,9 +239,10 @@ class Pipeline:
                 self.client, model_for("selector"),
                 new_stories, self.enricher._catalog_text,
                 max_stories, run_tracker,
+                max_per_source=max_per_source,
             )
         else:
-            new_stories = new_stories[:max_stories]
+            new_stories = cap_by_source(new_stories, max_stories, max_per_source)
 
         drafts = []
         for story in new_stories:
@@ -294,7 +306,7 @@ class Pipeline:
         verifier_model = model_for("verifier")
 
         # 1. Gather candidates → dedup against Notion (sync).
-        feeds, keywords = self._load_feeds(source)
+        feeds, keywords, max_per_source = self._load_feeds(source)
         self._feeds_config = feeds
         monitor = RSSMonitor(feeds, relevance_keywords=keywords, skip_dedup=True)
         stories = monitor.check_feeds()
@@ -307,14 +319,19 @@ class Pipeline:
         if not new_stories:
             return []
 
+        # Shuffle so neither the AI ranker nor the fallback below is biased
+        # toward feed-config order (sources listed first would otherwise win).
+        random.shuffle(new_stories)
+
         # 2. Select best N (sync Haiku).
         if len(new_stories) > max_stories:
             new_stories = select_best_stories(
                 self.client, model_for("selector"), new_stories,
                 self.enricher._catalog_text, max_stories, run_tracker,
+                max_per_source=max_per_source,
             )
         else:
-            new_stories = new_stories[:max_stories]
+            new_stories = cap_by_source(new_stories, max_stories, max_per_source)
 
         # 3. Fetch article text + strategist + enrich (sync).
         enriched_by_id: dict[str, object] = {}
@@ -326,6 +343,12 @@ class Pipeline:
                 enriched = self.enricher.enrich(story, run_tracker)
                 if not enriched.ember_data:
                     logger.warning(f"No data for '{story.title}', skipping")
+                    continue
+                if len(enriched.data_sources) < 2:
+                    logger.warning(
+                        f"Only {len(enriched.data_sources)} data provider(s) "
+                        f"for '{story.title}', skipping"
+                    )
                     continue
                 enriched_by_id[sid] = enriched
             except Exception:
@@ -476,12 +499,16 @@ class Pipeline:
                 tracker.track(r.message, label, model=model, batch=True)
         return results
 
-    def _load_feeds(self, source: str | None = None) -> tuple[list[dict], list[str]]:
-        """Load feed config, optionally filtering by source. Returns (feeds, keywords)."""
+    def _load_feeds(self, source: str | None = None) -> tuple[list[dict], list[str], int | None]:
+        """Load feed config, optionally filtering by source.
+
+        Returns (feeds, keywords, max_per_source).
+        """
         config_path = Path("config/feeds.yaml")
         feeds_cfg = yaml.safe_load(config_path.read_text(encoding="utf-8"))
         feeds = feeds_cfg.get("feeds", [])
         keywords = feeds_cfg.get("relevance_keywords", [])
+        max_per_source = feeds_cfg.get("max_per_source")
         if source:
             feeds = [f for f in feeds if f["source"] == source]
-        return feeds, keywords
+        return feeds, keywords, max_per_source

@@ -33,10 +33,19 @@ def test_pipeline_runs_end_to_end(mock_dotenv, mock_yaml, mock_monitor_cls, mock
     mock_ember = MagicMock()
     mock_ember.get_generation_context.return_value = {
         "entity": "World",
+        "source": "ember",
         "generation": [{"series": "Solar", "generation_twh": 100, "date": "2025"}],
         "carbon_intensity": [{"emissions_intensity_gco2_per_kwh": 400, "date": "2025"}],
     }
     mock_ember_cls.return_value = mock_ember
+
+    mock_eia = MagicMock()
+    mock_eia.get_generation_context.return_value = {
+        "entity": "World",
+        "source": "eia",
+        "generation": [{"period": "2025", "fuel_type": "SUN", "fuel_description": "Solar", "value": 500}],
+    }
+    mock_eia_cls.return_value = mock_eia
 
     mock_client = MagicMock()
     def make_response(text):
@@ -48,7 +57,12 @@ def test_pipeline_runs_end_to_end(mock_dotenv, mock_yaml, mock_monitor_cls, mock
 
     # Claude calls: strategist, draft, editor (pass verdict)
     mock_client.messages.create.side_effect = [
-        make_response('{"fetches": [{"source": "ember", "entity": "World", "role": "primary"}], "reasoning": "test"}'),
+        make_response(
+            '{"fetches": ['
+            '{"source": "ember", "entity": "World", "role": "primary"}, '
+            '{"source": "eia", "entity": "World", "role": "primary"}'
+            '], "reasoning": "test"}'
+        ),
         make_response("---\ntitle: Test\nstatus: draft\n---\n\nTest content."),
         make_response('{"verdict": "pass", "summary": "All claims verified."}'),
     ]
@@ -89,10 +103,19 @@ def test_research_and_draft_standalone(mock_dotenv, mock_eia_cls, mock_ember_cls
     mock_ember = MagicMock()
     mock_ember.get_generation_context.return_value = {
         "entity": "World",
+        "source": "ember",
         "generation": [{"series": "Coal", "generation_twh": 9000, "date": "2024"}],
         "carbon_intensity": [{"emissions_intensity_gco2_per_kwh": 471, "date": "2024"}],
     }
     mock_ember_cls.return_value = mock_ember
+
+    mock_eia = MagicMock()
+    mock_eia.get_generation_context.return_value = {
+        "entity": "World",
+        "source": "eia",
+        "generation": [{"period": "2024", "fuel_type": "COL", "fuel_description": "Coal", "value": 9000}],
+    }
+    mock_eia_cls.return_value = mock_eia
 
     mock_client = MagicMock()
     def make_response(text):
@@ -103,7 +126,12 @@ def test_research_and_draft_standalone(mock_dotenv, mock_eia_cls, mock_ember_cls
         return msg
 
     mock_client.messages.create.side_effect = [
-        make_response('{"fetches": [{"source": "ember", "entity": "World", "role": "primary"}], "reasoning": "test"}'),
+        make_response(
+            '{"fetches": ['
+            '{"source": "ember", "entity": "World", "role": "primary"}, '
+            '{"source": "eia", "entity": "World", "role": "primary"}'
+            '], "reasoning": "test"}'
+        ),
         make_response("---\ntitle: Coal Test\nstatus: draft\n---\n\nCoal content."),
         make_response('{"verdict": "pass", "summary": "OK."}'),
     ]
@@ -120,7 +148,7 @@ def test_research_and_draft_standalone(mock_dotenv, mock_eia_cls, mock_ember_cls
 
         assert draft_path.exists()
         assert edit_result["verdict"] == "pass"
-        assert enriched.entities == ["World"]
+        assert set(enriched.entities) == {"World"}
     finally:
         drafter_mod.DRAFTS_DIR = original_dir
 
@@ -161,4 +189,49 @@ def test_research_and_draft_raises_on_no_data(mock_dotenv, mock_eia_cls, mock_em
     pipeline = Pipeline()
 
     with pytest.raises(ValueError, match="No data available"):
+        pipeline.research_and_draft(story)
+
+
+@patch("pipeline.orchestrator.Anthropic")
+@patch("pipeline.orchestrator.EmberSource")
+@patch("pipeline.orchestrator.EIASource")
+@patch("pipeline.orchestrator.load_dotenv")
+@patch.dict("os.environ", {"EMBER_API_KEY": "fake", "EIA_API_KEY": "fake"})
+def test_research_and_draft_raises_on_single_provider(
+    mock_dotenv, mock_eia_cls, mock_ember_cls, mock_anthropic_cls,
+):
+    """research_and_draft() raises ValueError when only 1 data provider was used,
+    even though that provider returned real (non-empty) data."""
+    story = Story(
+        title="Single source story",
+        url="https://example.com/singlesource",
+        summary="A story with only one data provider.",
+        published="2026-04-01",
+        source="manual",
+        feed_name="manual",
+    )
+
+    mock_ember = MagicMock()
+    mock_ember.get_generation_context.return_value = {
+        "entity": "World",
+        "source": "ember",
+        "generation": [{"series": "Solar", "generation_twh": 100, "date": "2025"}],
+        "carbon_intensity": [{"emissions_intensity_gco2_per_kwh": 400, "date": "2025"}],
+    }
+    mock_ember_cls.return_value = mock_ember
+
+    mock_client = MagicMock()
+    msg = MagicMock()
+    msg.content = [MagicMock(
+        text='{"fetches": [{"source": "ember", "entity": "World", "role": "primary"}], "reasoning": "test"}'
+    )]
+    msg.usage.input_tokens = 100
+    msg.usage.output_tokens = 50
+    mock_client.messages.create.return_value = msg
+    mock_anthropic_cls.return_value = mock_client
+
+    from pipeline.orchestrator import Pipeline
+    pipeline = Pipeline()
+
+    with pytest.raises(ValueError, match="need 2\\+ distinct sources"):
         pipeline.research_and_draft(story)

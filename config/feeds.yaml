@@ -27,6 +27,13 @@ feeds:
     url: "https://electrek.co/feed/"
     source: electrek
 
+# Cap on how many of a single day's selected stories may come from one
+# source, so a source with more feeds (e.g. mongabay has 3) can't crowd out
+# the others. If enforcing this cap leaves fewer than max_stories candidates,
+# the run publishes fewer stories that day rather than backfilling from an
+# already-capped source.
+max_per_source: 2
+
 # Stories must match at least one keyword in title or summary to proceed.
 # This filters before any Claude API calls, saving cost.
 relevance_keywords:

@@ -76,12 +76,50 @@ def test_execute_plan_filters_empty_source_data():
         ],
         "reasoning": "Test",
     }
-    primary, benchmark = enricher._execute_plan(plan)
+    primary, benchmark, primary_sources = enricher._execute_plan(plan)
     # Ember data included, GFW empty data filtered out
     assert "Germany" in primary
     assert primary["Germany"]["generation"][0]["generation_twh"] == 72
     # GFW returned only metadata + empty list, should be filtered
     assert len(primary) == 1
+    # GFW's empty result shouldn't count toward the distinct-provider set
+    assert primary_sources == {"ember"}
+
+
+def test_format_primary_data_sorts_noaa_yearly_by_recency():
+    """NOAA yearly figures show the most recent years, regardless of the
+    order the raw API results happened to arrive in."""
+    enricher = Enricher({}, MagicMock())
+    data = {
+        "World": {
+            # Deliberately out of order (ascending, as the raw API often returns).
+            "yearly_temperature": [
+                {"year": "2020", "type": "TAVG", "value_celsius": 14.0},
+                {"year": "2024", "type": "TAVG", "value_celsius": 14.8},
+                {"year": "2022", "type": "TAVG", "value_celsius": 14.4},
+            ],
+        },
+    }
+    text = enricher._format_primary_data(data)
+    lines = [l for l in text.splitlines() if "TAVG" in l]
+    assert lines[0].strip().startswith("2024")
+
+
+def test_format_primary_data_sorts_noaa_monthly_by_recency():
+    """NOAA monthly (fallback) figures also show the most recent dates first."""
+    enricher = Enricher({}, MagicMock())
+    data = {
+        "World": {
+            "temperature": [
+                {"date": "2025-01", "type": "TAVG", "value_celsius": 10.0},
+                {"date": "2025-06", "type": "TAVG", "value_celsius": 22.0},
+                {"date": "2025-03", "type": "TAVG", "value_celsius": 14.0},
+            ],
+        },
+    }
+    text = enricher._format_primary_data(data)
+    lines = [l for l in text.splitlines() if "TAVG" in l]
+    assert lines[0].strip().startswith("2025-06")
 
 
 def test_is_empty_data():
