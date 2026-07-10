@@ -5,3 +5,6 @@ rules:
 - Distinguish between electricity demand and total energy demand — heating is often
   gas-powered while cooling is electric — so seasonal demand peaks differ by energy
   type, and solar generation offsets only the electricity share.
+- When citing a quantitative metric (e.g., solar radiation, resource potential), always
+  include a comparative benchmark (e.g., vs. national/regional average or other locations)
+  so readers can judge whether the figure is high or low.
